@@ -1,20 +1,9 @@
 import os
-
 import argparse
-# from utils import *
-import torch
-import numpy as np
-import torch.nn as nn
-import torchvision.models as models
-import torch.nn.functional as F
-from torch.autograd import Variable
 
 from cogan_demo.dataset import get_dataset
 from cogan_demo.utils import *
 from cogan_demo.model import *
-
-
-#################################################################################################
 
 
 parser = argparse.ArgumentParser(description='Contrastive view')
@@ -22,13 +11,14 @@ parser.add_argument('--batch_size', default=96, type=int, help='batch size')
 parser.add_argument('--margin', default=100, type=int, help='batch size')
 parser.add_argument('--delta_1', default=1, type=float, help='Delta 1 HyperParameter')
 parser.add_argument('--delta_2', default=1, type=float, help='Delta 2 HyperParameter')
-parser.add_argument('--photo_folder', type=str,
-                    default='../clean_12_as_train/photo/',
+parser.add_argument('--nir_folder', type=str,
+                    default='/home/hulk2/data/periocular/hk/images/dev/NIR',
                     help='path to data')
-parser.add_argument('--print_folder', type=str,
-                    default='../clean_12_as_train/print/',
+parser.add_argument('--vis_folder', type=str,
+                    default='/home/hulk2/data/periocular/hk/images/dev/VIS',
                     help='path to data')
-
+parser.add_argument('--valid_classes_filepath', type=str,
+                    help='text file of class labels to include in dataset')
 parser.add_argument('--save_folder', type=str,
                     default='./checkpoint/',
                     help='path to save the data')
@@ -41,6 +31,8 @@ parser.add_argument('-d', '--feat_dim', default=128, type=int,
                     help='feature dimension for contrastive loss')
 
 args = parser.parse_args()
+
+os.makedirs(args.save_folder, exist_ok=True)
 
 device = torch.device('cuda:0')
 
@@ -66,8 +58,16 @@ disc_print.train()
 #     print(i, p.size())
 # exit()
 
-optimizer_G = torch.optim.Adam(list(net_photo.parameters()) + list(net_print.parameters()), lr=1e-4, weight_decay=1e-4)
-optimizer_D = torch.optim.Adam(list(disc_photo.parameters()) + list(disc_print.parameters()), lr=1e-4, weight_decay=1e-4)
+optimizer_G = torch.optim.Adam(
+    params=list(net_photo.parameters()) + list(net_print.parameters()),
+    lr=1e-4,
+    weight_decay=1e-4
+)
+optimizer_D = torch.optim.Adam(
+    params=list(disc_photo.parameters()) + list(disc_print.parameters()),
+    lr=1e-4,
+    weight_decay=1e-4
+)
 
 adversarial_loss = torch.nn.MSELoss().to(device)
 L2_Norm_loss = torch.nn.MSELoss().to(device)
@@ -89,20 +89,20 @@ for epoch in range(500):
     loss_m_g = AverageMeter()
     acc_m = AverageMeter()
 
-    for iter, (img_photo, img_print, lbl) in enumerate(train_loader):
-
+    for step, (img_photo, img_print, lbl) in enumerate(train_loader):
         # plot_tensor([img_photo[0], img_print[0]])
-
         bs = img_photo.size(0)
         lbl = lbl.type(torch.float)
 
-        img_photo, img_print, lbl = img_photo.to(device), img_print.to(device), lbl.to(device)
+        img_photo = img_photo.to(device)
+        img_print = img_print.to(device)
+        lbl = lbl.to(device)
+
         # This work is for my first disc
         # valid = Variable(Tensor(np.ones((img_photo.size(0), *patch))), requires_grad=False)
         # fake = Variable(Tensor(np.zeros((img_photo.size(0), *patch))), requires_grad=False)
         valid = Variable(Tensor(bs, 1).fill_(1.0), requires_grad=False)
         fake = Variable(Tensor(bs, 1).fill_(0.0), requires_grad=False)
-
 
         # """"""""""""""""""
         # "   Generator    "
@@ -111,15 +111,16 @@ for epoch in range(500):
         fake_photo, y_photo = net_photo(img_photo)
         fake_print, y_print = net_print(img_print)
 
-
         # This work is for my first disc
         # pred_fake_photo = disc_photo(fake_photo, img_photo)
         # pred_fake_print = disc_print(fake_print, img_print)
         pred_fake_photo = disc_photo(fake_photo)
         pred_fake_print = disc_print(fake_print)
 
-        loss_GAN = (adversarial_loss(pred_fake_photo, valid) + adversarial_loss(pred_fake_print, valid)) / 2
-        loss_L2 = (L2_Norm_loss(fake_photo, img_photo) + L2_Norm_loss(fake_print, img_print)) / 2
+        loss_GAN = (adversarial_loss(pred_fake_photo, valid) +
+                    adversarial_loss(pred_fake_print, valid)) / 2
+        loss_L2 = (L2_Norm_loss(fake_photo, img_photo) +
+                   L2_Norm_loss(fake_print, img_print)) / 2
 
         dist = ((y_photo - y_print) ** 2).sum(1)
 
@@ -137,9 +138,7 @@ for epoch in range(500):
         acc = acc.mean()
         acc_m.update(acc)
 
-
         loss_m_g.update(loss.item())
-
 
         # """"""""""""""""""
         # " Discriminator  "
@@ -171,20 +170,24 @@ for epoch in range(500):
 
         loss_m_d.update(d_loss.item())
 
-        if iter % 10 == 0:
-            print('epoch: %02d, iter: %02d/%02d, D loss: %.4f, G loss: %.4f, acc: %.4f' % (epoch, iter, len(train_loader), loss_m_d.avg, loss_m_g.avg, acc_m.avg))
-    state = {}
-    state['net_photo'] = net_photo.state_dict()
-    state['net_print'] = net_print.state_dict()
-    state['optimizer'] = optimizer_G.state_dict()
-    state['disc_photo'] = disc_photo.state_dict()
-    state['disc_print'] = disc_print.state_dict()
-    modelName = str(args.basenet) + "_" + str(args.margin) + "_" + str(args.delta_1) + "_" + str(args.delta_2) + "_" + str(args.feat_dim)
-    # modelName = "model_unetV2_" + str(args.margin) + "_" + str(args.delta_1) + "_" + str(args.delta_2)
-    # modelName = "model_unetV3_" + str(args.margin) + "_" + str(args.delta_1) + "_" + str(args.delta_2)
-    # modelName = "model_unetV4_" + str(args.margin) + "_" + str(args.delta_1) + "_" + str(args.delta_2)
-    # modelName = "model_unetV5_" + str(args.margin) + "_" + str(args.delta_1) + "_" + str(args.delta_2)
-    # modelName = "model_unetV6_" + str(args.margin) + "_" + str(args.delta_1) + "_" + str(args.delta_2)
-    # modelName = "model_unetV1_" + str(args.margin) + "_" + str(args.delta_1) + "_" + str(args.delta_2)
+        if step % 10 == 0:
+            print(
+                'epoch: %02d, iter: %02d/%02d, D loss: %.4f, G loss: %.4f, acc: %.4f'
+                % (epoch, step, len(train_loader), loss_m_d.avg, loss_m_g.avg, acc_m.avg)
+            )
+
+    state = {
+        'net_photo': net_photo.state_dict(),
+        'net_print': net_print.state_dict(),
+        'disc_photo': disc_photo.state_dict(),
+        'disc_print': disc_print.state_dict(),
+        'optimizer': optimizer_G.state_dict()
+    }
+
+    modelName = (str(args.basenet) + "_" +
+                 str(args.margin) + "_" +
+                 str(args.delta_1) + "_" +
+                 str(args.delta_2) + "_" +
+                 str(args.feat_dim))
     torch.save(state, os.path.join(args.save_folder, modelName + '.pt'))
     print('\nmodel saved!\n')

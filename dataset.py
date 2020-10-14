@@ -1,7 +1,10 @@
-import random
 import torch
+import random
+import numpy as np
 from torch.utils.data import Dataset
 from torchvision import datasets, transforms
+
+from cogan_demo.hk_polyu import class_filter
 
 
 class ContrastiveDataset(Dataset):
@@ -56,10 +59,15 @@ class ContrastiveDataset(Dataset):
 def get_dataset(args):
     mean = [0.5, 0.5, 0.5]
     std = [0.5, 0.5, 0.5]
+    if hasattr(args, 'valid_classes_filepath'):
+        valid_classes = np.loadtxt(args.valid_classes_filepath, dtype=str)
+        is_valid_file_fn = class_filter(valid_classes)
+    else:
+        is_valid_file_fn = None
 
-    photo_dataset = datasets.ImageFolder(
-        args.photo_folder,
-        transforms.Compose([
+    vis_dataset = datasets.ImageFolder(
+        root=args.vis_folder,
+        transform=transforms.Compose([
             transforms.Resize(256),
             transforms.Pad(16),
             transforms.RandomCrop(256),
@@ -68,11 +76,13 @@ def get_dataset(args):
             # transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean=mean, std=std),
-        ]))
+        ]),
+        is_valid_file=is_valid_file_fn
+    )
 
-    print_dataset = datasets.ImageFolder(
-        args.print_folder,
-        transforms.Compose([
+    nir_dataset = datasets.ImageFolder(
+        root=args.nir_folder,
+        transform=transforms.Compose([
             transforms.Resize(256),
             transforms.Pad(16),
             transforms.RandomCrop(256),
@@ -81,10 +91,12 @@ def get_dataset(args):
             # transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean=mean, std=std),
-        ]))
+        ]),
+        is_valid_file=is_valid_file_fn
+    )
 
     train_loader = torch.utils.data.DataLoader(
-        ContrastiveDataset(print_dataset, photo_dataset),
+        ContrastiveDataset(nir_dataset, vis_dataset),
         batch_size=args.batch_size,
         shuffle=True,
         pin_memory=True
