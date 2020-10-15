@@ -186,11 +186,8 @@ for epoch in range(500):
     }
 
     split = os.path.splitext(os.path.basename(args.valid_classes_filepath))[0]
-    modelName = (split + "_" +
-                 str(args.basenet) + "_" +
-                 str(args.margin) + "_" +
-                 str(args.delta_1) + "_" +
-                 str(args.delta_2) + "_" +
-                 str(args.feat_dim))
-    torch.save(state, os.path.join(args.ckpt_dir, modelName + '.pt'))
+    model_name = '{}_{}_{}_{}_{}_{}'.format(
+        split, args.basenet, args.margin, args.delta_1, args.delta_2, args.feat_dim
+    )
+    torch.save(state, os.path.join(args.ckpt_dir, model_name + '.pt'))
     print('\nmodel saved!\n')

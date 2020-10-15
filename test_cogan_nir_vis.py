@@ -41,9 +41,6 @@ parser.add_argument('--valid_classes_filepath', type=str,
 parser.add_argument('--ckpt_fp', type=str,
                     default='../checkpoint/',
                     help='path to save the data')
-parser.add_argument('--eval_dir', type=str,
-                    default='../eval/',
-                    help='path to save the data')
 
 parser.add_argument('--basenet', default='resnet18', type=str,
                     help='e.g., resnet50, resnext50, resnext101'
@@ -54,25 +51,24 @@ parser.add_argument('-d', '--feat_dim', default=128, type=int,
 
 args = parser.parse_args()
 
-device = torch.device('cuda:0')
+gpu0 = torch.device('cuda:0')
+gpu1 = torch.device('cuda:1')
+cpu = torch.device('cpu')
 
-output_dir = os.path.join(
-    args.eval_dir,
-    '{}_{}_{}_{}'.format(args.margin, args.delta_1, args.delta_2, args.feat_dim)
-)
+output_dir = os.path.splitext(args.ckpt_fp)[0]
 os.makedirs(output_dir, exist_ok=True)
 
 state = torch.load(args.ckpt_fp)
 
 net_photo = Mapper(prenet='resnet18', outdim=args.feat_dim)
 
-net_photo.to(device)
+net_photo.to(gpu0)
 net_photo.load_state_dict(state['net_photo'])
 net_photo.eval()
 
 net_print = Mapper(prenet='resnet18', outdim=args.feat_dim)
 
-net_print.to(device)
+net_print.to(gpu1)
 net_print.load_state_dict(state['net_print'])
 net_print.eval()
 
@@ -88,11 +84,15 @@ for step, (img_photo, img_print, lbl) in enumerate(train_loader):
     bs = img_photo.size(0)
     lbl = lbl.type(torch.float)
 
-    img_photo, img_print, lbl = img_photo.to(device), img_print.to(device), lbl.to(device)
+    img_photo = img_photo.to(gpu0)
+    img_print = img_print.to(gpu1)
+    # lbl = lbl.to(gpu0)
 
     _, y_photo = net_photo(img_photo)
     _, y_print = net_print(img_print)
 
+    y_photo = y_photo.to(cpu)
+    y_print = y_print.to(cpu)
     dist = ((y_photo - y_print) ** 2).sum(1)
     dist_l.append(dist.data)
     lbl_l.append((1-lbl).data)
