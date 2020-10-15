@@ -37,7 +37,7 @@ from cogan_demo.utils import *
 #         return output
 #
 #
-# def comp_bnfeatures(self):
+# def extract_bn_features(self):
 #     # extract batchnorm features
 #     feature = []
 #     for i in range(len(self.bn_hook)):
