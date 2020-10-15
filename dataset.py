@@ -66,7 +66,7 @@ def get_dataset(args):
         is_valid_file_fn = None
 
     vis_dataset = datasets.ImageFolder(
-        root=args.vis_folder,
+        root=args.vis_dir,
         transform=transforms.Compose([
             transforms.Resize(256),
             transforms.Pad(16),
@@ -81,7 +81,7 @@ def get_dataset(args):
     )
 
     nir_dataset = datasets.ImageFolder(
-        root=args.nir_folder,
+        root=args.nir_dir,
         transform=transforms.Compose([
             transforms.Resize(256),
             transforms.Pad(16),

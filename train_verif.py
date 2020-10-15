@@ -11,15 +11,15 @@ parser.add_argument('--batch_size', default=96, type=int, help='batch size')
 parser.add_argument('--margin', default=100, type=int, help='batch size')
 parser.add_argument('--delta_1', default=1, type=float, help='Delta 1 HyperParameter')
 parser.add_argument('--delta_2', default=1, type=float, help='Delta 2 HyperParameter')
-parser.add_argument('--nir_folder', type=str,
+parser.add_argument('--nir_dir', type=str,
                     default='/home/hulk2/data/periocular/hk/images/dev/NIR',
                     help='path to data')
-parser.add_argument('--vis_folder', type=str,
+parser.add_argument('--vis_dir', type=str,
                     default='/home/hulk2/data/periocular/hk/images/dev/VIS',
                     help='path to data')
 parser.add_argument('--valid_classes_filepath', type=str,
                     help='text file of class labels to include in dataset')
-parser.add_argument('--save_folder', type=str,
+parser.add_argument('--ckpt_dir', type=str,
                     default='./checkpoint/',
                     help='path to save the data')
 
@@ -32,7 +32,7 @@ parser.add_argument('-d', '--feat_dim', default=128, type=int,
 
 args = parser.parse_args()
 
-os.makedirs(args.save_folder, exist_ok=True)
+os.makedirs(args.ckpt_dir, exist_ok=True)
 
 device = torch.device('cuda:0')
 
@@ -55,6 +55,7 @@ disc_print.to(device)
 disc_print.train()
 
 # for i, p in net_print.named_parameters():
+
 #     print(i, p.size())
 # exit()
 
@@ -79,7 +80,7 @@ print(len(train_loader))
 Tensor = torch.cuda.FloatTensor
 patch = (1, 256 // 2 ** 4, 256 // 2 ** 4)
 
-# output_dir = str(args.save_folder) + str(args.margin) + "_" + str(args.delta_1) + "_" + str(args.delta_2)
+# output_dir = str(args.ckpt_dir) + str(args.margin) + "_" + str(args.delta_1) + "_" + str(args.delta_2)
 # os.makedirs("%s" % (output_dir), exist_ok=True)
 
 for epoch in range(500):
@@ -184,10 +185,12 @@ for epoch in range(500):
         'optimizer': optimizer_G.state_dict()
     }
 
-    modelName = (str(args.basenet) + "_" +
+    split = os.path.splitext(os.path.basename(args.valid_classes_filepath))[0]
+    modelName = (split + "_" +
+                 str(args.basenet) + "_" +
                  str(args.margin) + "_" +
                  str(args.delta_1) + "_" +
                  str(args.delta_2) + "_" +
                  str(args.feat_dim))
-    torch.save(state, os.path.join(args.save_folder, modelName + '.pt'))
+    torch.save(state, os.path.join(args.ckpt_dir, modelName + '.pt'))
     print('\nmodel saved!\n')
