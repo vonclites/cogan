@@ -32,26 +32,26 @@ parser.add_argument('-d', '--feat_dim', default=128, type=int,
 
 args = parser.parse_args()
 
-os.makedirs(args.ckpt_dir, exist_ok=True)
-
-device = torch.device('cuda:0')
+gpu0 = torch.device('cuda:0')
+gpu1 = torch.device('cuda:1')
+cpu = torch.device('cpu')
 
 net_photo = Mapper(prenet='resnet18', outdim=args.feat_dim)
 # net_photo = UNet(feat_dim=args.feat_dim)
-net_photo.to(device)
+net_photo.to(gpu0)
 net_photo.train()
 
 net_print = Mapper(prenet='resnet18', outdim=args.feat_dim)
 # net_print = UNet(feat_dim=args.feat_dim)
-net_print.to(device)
+net_print.to(gpu1)
 net_print.train()
 
 disc_photo = Discriminator(in_channels=3)
-disc_photo.to(device)
+disc_photo.to(gpu0)
 disc_photo.train()
 
 disc_print = Discriminator(in_channels=3)
-disc_print.to(device)
+disc_print.to(gpu1)
 disc_print.train()
 
 # for i, p in net_print.named_parameters():
@@ -70,8 +70,10 @@ optimizer_D = torch.optim.Adam(
     weight_decay=1e-4
 )
 
-adversarial_loss = torch.nn.MSELoss().to(device)
-L2_Norm_loss = torch.nn.MSELoss().to(device)
+adversarial_photo_loss = torch.nn.MSELoss().to(gpu0)
+adversarial_print_loss = torch.nn.MSELoss().to(gpu1)
+l2_photo_loss = torch.nn.MSELoss().to(gpu0)
+l2_print_loss = torch.nn.MSELoss().to(gpu1)
 
 train_loader = get_dataset(args)
 
@@ -79,9 +81,6 @@ print(len(train_loader))
 
 Tensor = torch.cuda.FloatTensor
 patch = (1, 256 // 2 ** 4, 256 // 2 ** 4)
-
-# output_dir = str(args.ckpt_dir) + str(args.margin) + "_" + str(args.delta_1) + "_" + str(args.delta_2)
-# os.makedirs("%s" % (output_dir), exist_ok=True)
 
 for epoch in range(500):
     print(epoch)
@@ -95,13 +94,10 @@ for epoch in range(500):
         bs = img_photo.size(0)
         lbl = lbl.type(torch.float)
 
-        img_photo = img_photo.to(device)
-        img_print = img_print.to(device)
-        lbl = lbl.to(device)
+        img_photo = img_photo.to(gpu0)
+        img_print = img_print.to(gpu1)
+        lbl = lbl.to(cpu)
 
-        # This work is for my first disc
-        # valid = Variable(Tensor(np.ones((img_photo.size(0), *patch))), requires_grad=False)
-        # fake = Variable(Tensor(np.zeros((img_photo.size(0), *patch))), requires_grad=False)
         valid = Variable(Tensor(bs, 1).fill_(1.0), requires_grad=False)
         fake = Variable(Tensor(bs, 1).fill_(0.0), requires_grad=False)
 
@@ -112,23 +108,24 @@ for epoch in range(500):
         fake_photo, y_photo = net_photo(img_photo)
         fake_print, y_print = net_print(img_print)
 
-        # This work is for my first disc
-        # pred_fake_photo = disc_photo(fake_photo, img_photo)
-        # pred_fake_print = disc_print(fake_print, img_print)
         pred_fake_photo = disc_photo(fake_photo)
         pred_fake_print = disc_print(fake_print)
 
-        loss_GAN = (adversarial_loss(pred_fake_photo, valid) +
-                    adversarial_loss(pred_fake_print, valid)) / 2
-        loss_L2 = (L2_Norm_loss(fake_photo, img_photo) +
-                   L2_Norm_loss(fake_print, img_print)) / 2
+        adversarial_loss = (
+            adversarial_photo_loss(pred_fake_photo, valid.to(gpu0)).to(cpu) +
+            adversarial_print_loss(pred_fake_print, valid.to(gpu1)).to(cpu)
+        ) / 2
+        l2_loss = (
+            l2_photo_loss(fake_photo, img_photo).to(cpu) +
+            l2_print_loss(fake_print, img_print).to(cpu)
+        ) / 2
 
-        dist = ((y_photo - y_print) ** 2).sum(1)
+        dist = ((y_photo.to(cpu) - y_print.to(cpu)) ** 2).sum(1)
 
-        margin = torch.ones_like(dist, device=device) * args.margin
+        margin = torch.ones_like(dist, device=cpu) * args.margin
 
         loss = lbl * dist + (1 - lbl) * F.relu(margin - dist)
-        loss = loss.mean() + loss_GAN * args.delta_1 + loss_L2 * args.delta_2
+        loss = loss.mean() + adversarial_loss * args.delta_1 + l2_loss * args.delta_2
 
         optimizer_G.zero_grad()
         loss.backward()
@@ -144,14 +141,6 @@ for epoch in range(500):
         # """"""""""""""""""
         # " Discriminator  "
         # """"""""""""""""""
-        # This work is for my first disc
-        # pred_real_photo = disc_photo(img_photo, img_photo)
-        # pred_fake_photo = disc_photo(fake_photo.detach(), img_photo)
-        #
-        # pred_real_print = disc_print(img_print, img_print)
-        # pred_fake_print = disc_print(fake_print.detach(), img_print)
-
-        # This work is for my second disc
         pred_real_photo = disc_photo(img_photo)
         pred_fake_photo = disc_photo(fake_photo.detach())
 
@@ -159,10 +148,10 @@ for epoch in range(500):
         pred_fake_print = disc_print(fake_print.detach())
 
         d_loss = (
-            adversarial_loss(pred_real_print, valid)
-            + adversarial_loss(pred_real_photo, valid)
-            + adversarial_loss(pred_fake_print, fake)
-            + adversarial_loss(pred_fake_photo, fake)
+            adversarial_photo_loss(pred_real_photo, valid.to(gpu0)).to(cpu) +
+            adversarial_print_loss(pred_real_print, valid.to(gpu1)).to(cpu) +
+            adversarial_photo_loss(pred_fake_photo, fake.to(gpu0)).to(cpu) +
+            adversarial_print_loss(pred_fake_print, fake.to(gpu1)).to(cpu)
         ) / 4
 
         optimizer_D.zero_grad()
@@ -191,5 +180,6 @@ for epoch in range(500):
     )
     ckpt_dir = os.path.join(args.ckpt_dir, model_name)
     ckpt_fp = os.path.join(ckpt_dir, model_name + '.pt')
+    os.makedirs(ckpt_dir, exist_ok=True)
     torch.save(state, ckpt_fp)
     print('\nmodel saved!\n')
