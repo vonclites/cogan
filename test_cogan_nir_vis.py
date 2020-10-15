@@ -1,6 +1,7 @@
 import os
 import argparse
 import numpy as np
+import matplotlib.pyplot as plt
 import sklearn.metrics as metrics
 
 from cogan_demo.dataset import get_dataset
@@ -108,14 +109,13 @@ roc_auc = metrics.auc(fpr, tpr)
 np.save(os.path.join(output_dir, 'pr_ph_lbl_test.npy'), lbl)
 np.save(os.path.join(output_dir, 'pr_ph_dist_test.npy'), dist)
 
-# method I: plt
-# import matplotlib.pyplot as plt
-# plt.title('Receiver Operating Characteristic')
-# plt.plot(fpr, tpr, 'b', label = 'AUC = %0.2f' % roc_auc)
-# plt.legend(loc = 'lower right')
-# plt.plot([0, 1], [0, 1],'r--')
-# plt.xlim([0, 1])
-# plt.ylim([0, 1])
-# plt.ylabel('True Positive Rate')
-# plt.xlabel('False Positive Rate')
-# plt.show()
+plt.title('Receiver Operating Characteristic')
+plt.plot(fpr, tpr, 'b', label='AUC = %0.2f' % roc_auc)
+plt.legend(loc='lower right')
+plt.plot([0, 1], [0, 1], 'r--')
+plt.xlim([0, 1])
+plt.ylim([0, 1])
+plt.ylabel('True Positive Rate')
+plt.xlabel('False Positive Rate')
+plt.show()
+plt.savefig(os.path.join(output_dir, 'roc.png'))

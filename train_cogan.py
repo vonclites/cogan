@@ -189,5 +189,7 @@ for epoch in range(500):
     model_name = '{}_{}_{}_{}_{}_{}'.format(
         split, args.basenet, args.margin, args.delta_1, args.delta_2, args.feat_dim
     )
-    torch.save(state, os.path.join(args.ckpt_dir, model_name + '.pt'))
+    ckpt_dir = os.path.join(args.ckpt_dir, model_name)
+    ckpt_fp = os.path.join(ckpt_dir, model_name + '.pt')
+    torch.save(state, ckpt_fp)
     print('\nmodel saved!\n')
