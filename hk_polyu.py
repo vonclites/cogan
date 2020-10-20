@@ -2,6 +2,7 @@ import os
 import shutil
 import numpy as np
 import random as python_random
+from skimage.io import imread
 from sklearn.model_selection import KFold, train_test_split
 
 SESSION1_DIR = '/home/hulk2/data/periocular/hk/PolyU_Cross_Session_1/PolyU_Cross_Iris'
@@ -47,6 +48,18 @@ def write_dev_subject_list(dev_splits, output_dir):
         filepath = os.path.join(output_dir, 'val{}.txt'.format(split))
         with open(filepath, 'w') as f:
             f.write('\n'.join(validation_subjects))
+
+
+def calculate_image_stats(domain_dir):
+    images = []
+    for subject in os.listdir(domain_dir):
+        subject_dir = os.path.join(domain_dir, subject)
+        for filename in os.listdir(subject_dir):
+            image = imread(os.path.join(subject_dir, filename))
+            images.append(image)
+    mean = np.mean(images, axis=(0, 1, 2))
+    std = np.std(images, axis=(0, 1, 2))
+    return mean, std
 
 
 def run():
