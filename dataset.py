@@ -59,7 +59,7 @@ class ContrastiveDataset(Dataset):
 def get_dataset(args):
     mean = [0.5, 0.5, 0.5]
     std = [0.5, 0.5, 0.5]
-    if hasattr(args, 'valid_classes_filepath'):
+    if args.valid_classes_filepath is not None:
         valid_classes = np.loadtxt(args.valid_classes_filepath, dtype=str)
         is_valid_file_fn = class_filter(valid_classes)
     else:

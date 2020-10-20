@@ -1,5 +1,7 @@
 import os
 import argparse
+import numpy as np
+import random as python_random
 
 from cogan_demo.dataset import get_dataset
 from cogan_demo.utils import *
@@ -9,8 +11,8 @@ from cogan_demo.model import *
 parser = argparse.ArgumentParser(description='Contrastive view')
 parser.add_argument('--batch_size', default=96, type=int, help='batch size')
 parser.add_argument('--margin', default=100, type=int, help='batch size')
-parser.add_argument('--delta_1', default=1, type=float, help='Delta 1 HyperParameter')
-parser.add_argument('--delta_2', default=1, type=float, help='Delta 2 HyperParameter')
+parser.add_argument('--delta_1', default=1, type=float, help='Adversarial Coefficient')
+parser.add_argument('--delta_2', default=1, type=float, help='L2 Coefficient')
 parser.add_argument('--nir_dir', type=str,
                     default='/home/hulk2/data/periocular/hk/images/dev/NIR',
                     help='path to data')
@@ -31,6 +33,10 @@ parser.add_argument('-d', '--feat_dim', default=128, type=int,
                     help='feature dimension for contrastive loss')
 
 args = parser.parse_args()
+
+python_random.seed(62484)
+np.random.seed(62484)
+torch.manual_seed(62484)
 
 gpu0 = torch.device('cuda:0')
 gpu1 = torch.device('cuda:1')
@@ -162,7 +168,7 @@ for epoch in range(500):
 
         if step % 10 == 0:
             print(
-                'epoch: %02d, iter: %02d/%02d, D loss: %.4f, G loss: %.4f, acc: %.4f'
+                'Epoch: %02d, iter: %02d/%02d, D loss: %.4f, G loss: %.4f, acc: %.4f'
                 % (epoch, step, len(train_loader), loss_m_d.avg, loss_m_g.avg, acc_m.avg)
             )
 
@@ -174,12 +180,13 @@ for epoch in range(500):
         'optimizer': optimizer_G.state_dict()
     }
 
-    split = os.path.splitext(os.path.basename(args.valid_classes_filepath))[0]
-    model_name = '{}_{}_{}_{}_{}_{}'.format(
-        split, args.basenet, args.margin, args.delta_1, args.delta_2, args.feat_dim
+    model_name = '{}_{}_{}_{}_{}'.format(
+        args.basenet, args.margin, args.delta_1, args.delta_2, args.feat_dim
     )
-    ckpt_dir = os.path.join(args.ckpt_dir, model_name)
-    ckpt_fp = os.path.join(ckpt_dir, model_name + '.pt')
+    model_dir = os.path.join(args.ckpt_dir, model_name)
+    data_split = os.path.splitext(os.path.basename(args.valid_classes_filepath))[0]
+    ckpt_dir = os.path.join(model_dir, data_split)
+    ckpt_fp = os.path.join(ckpt_dir, 'checkpoint.pt')
     os.makedirs(ckpt_dir, exist_ok=True)
     torch.save(state, ckpt_fp)
-    print('\nmodel saved!\n')
+    print('\nModel saved!\n')

@@ -1,6 +1,8 @@
 import os
 import argparse
+import torchvision
 import numpy as np
+import random as python_random
 import matplotlib.pyplot as plt
 import sklearn.metrics as metrics
 
@@ -39,8 +41,9 @@ parser.add_argument('--vis_dir', type=str,
                     help='path to data')
 parser.add_argument('--valid_classes_filepath', type=str,
                     help='text file of class labels to include in dataset')
-parser.add_argument('--ckpt_fp', type=str,
-                    default='../checkpoint/',
+parser.add_argument('--ckpt_dir', type=str,
+                    help='path to save the data')
+parser.add_argument('--results_folder', type=str,
                     help='path to save the data')
 
 parser.add_argument('--basenet', default='resnet18', type=str,
@@ -50,16 +53,21 @@ parser.add_argument('--net', default='unetV1', type=str)
 parser.add_argument('-d', '--feat_dim', default=128, type=int,
                     help='feature dimension for contrastive loss')
 
+
 args = parser.parse_args()
+
+python_random.seed(62484)
+np.random.seed(62484)
+torch.manual_seed(62484)
 
 gpu0 = torch.device('cuda:0')
 gpu1 = torch.device('cuda:1')
 cpu = torch.device('cpu')
 
-output_dir = os.path.splitext(args.ckpt_fp)[0]
+output_dir = os.path.join(args.ckpt_dir, args.results_folder)
 os.makedirs(output_dir, exist_ok=True)
 
-state = torch.load(args.ckpt_fp)
+state = torch.load(os.path.join(args.ckpt_dir, 'checkpoint.pt'))
 
 net_photo = Mapper(prenet='resnet18', outdim=args.feat_dim)
 
@@ -89,8 +97,8 @@ for step, (img_photo, img_print, lbl) in enumerate(train_loader):
     img_print = img_print.to(gpu1)
     # lbl = lbl.to(gpu0)
 
-    _, y_photo = net_photo(img_photo)
-    _, y_print = net_print(img_print)
+    fake_photo, y_photo = net_photo(img_photo)
+    fake_print, y_print = net_print(img_print)
 
     y_photo = y_photo.to(cpu)
     y_print = y_print.to(cpu)
@@ -109,6 +117,11 @@ roc_auc = metrics.auc(fpr, tpr)
 np.save(os.path.join(output_dir, 'pr_ph_lbl_test.npy'), lbl)
 np.save(os.path.join(output_dir, 'pr_ph_dist_test.npy'), dist)
 
+torchvision.utils.save_image(img_photo[:6], os.path.join(output_dir, 'real_vis.png'))
+torchvision.utils.save_image(img_print[:6], os.path.join(output_dir, 'real_nir.png'))
+torchvision.utils.save_image(fake_photo[:6], os.path.join(output_dir, 'fake_vis.png'))
+torchvision.utils.save_image(fake_print[:6], os.path.join(output_dir, 'fake_nir.png'))
+
 plt.title('Receiver Operating Characteristic')
 plt.plot(fpr, tpr, 'b', label='AUC = %0.2f' % roc_auc)
 plt.legend(loc='lower right')
@@ -117,5 +130,5 @@ plt.xlim([0, 1])
 plt.ylim([0, 1])
 plt.ylabel('True Positive Rate')
 plt.xlabel('False Positive Rate')
-plt.show()
 plt.savefig(os.path.join(output_dir, 'roc.png'))
+plt.show()
