@@ -57,7 +57,11 @@ class ContrastiveDataset(Dataset):
 
 
 def get_dataset(args):
-    mean = [0.5, 0.5, 0.5]
+    vis_mean = np.loadtxt(args.vis_mean_fp) / 255.0
+    vis_std = np.loadtxt(args.vis_std_fp) / 255.0
+    nir_mean = np.loadtxt(args.nir_mean_fp) / 255.0
+    nir_std = np.loadtxt(args.nir_std_fp) / 255.0
+
     std = [0.5, 0.5, 0.5]
     if args.valid_classes_filepath is not None:
         valid_classes = np.loadtxt(args.valid_classes_filepath, dtype=str)
@@ -75,7 +79,7 @@ def get_dataset(args):
             # transforms.RandomCrop(256),
             # transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize(mean=mean, std=std),
+            transforms.Normalize(mean=vis_mean, std=vis_std)
         ]),
         is_valid_file=is_valid_file_fn
     )
@@ -90,7 +94,7 @@ def get_dataset(args):
             # transforms.RandomCrop(256),
             # transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize(mean=mean, std=std),
+            transforms.Normalize(mean=nir_mean, std=nir_std)
         ]),
         is_valid_file=is_valid_file_fn
     )

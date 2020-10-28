@@ -9,7 +9,7 @@ from cogan_demo.model import *
 
 
 parser = argparse.ArgumentParser(description='Contrastive view')
-parser.add_argument('--batch_size', default=96, type=int, help='batch size')
+parser.add_argument('--batch_size', default=128, type=int, help='batch size')
 parser.add_argument('--margin', default=100, type=int, help='batch size')
 parser.add_argument('--delta_1', default=1, type=float, help='Adversarial Coefficient')
 parser.add_argument('--delta_2', default=1, type=float, help='L2 Coefficient')
@@ -24,6 +24,18 @@ parser.add_argument('--valid_classes_filepath', type=str,
 parser.add_argument('--ckpt_dir', type=str,
                     default='./checkpoint/',
                     help='path to save the data')
+parser.add_argument('--nir_mean_fp', type=str,
+                    default='/home/hulk2/data/periocular/hk/images/dev/nir_mean.txt',
+                    help='Path to file containing channelwise image statistic')
+parser.add_argument('--nir_std_fp', type=str,
+                    default='/home/hulk2/data/periocular/hk/images/dev/nir_std.txt',
+                    help='Path to file containing channelwise image statistic')
+parser.add_argument('--vis_mean_fp', type=str,
+                    default='/home/hulk2/data/periocular/hk/images/dev/vis_mean.txt',
+                    help='Path to file containing channelwise image statistic')
+parser.add_argument('--vis_std_fp', type=str,
+                    default='/home/hulk2/data/periocular/hk/images/dev/vis_std.txt',
+                    help='Path to file containing channelwise image statistic')
 
 # model setup
 parser.add_argument('--basenet', default='resnet18', type=str,
