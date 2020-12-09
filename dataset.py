@@ -62,7 +62,6 @@ def get_dataset(args):
     nir_mean = np.loadtxt(args.nir_mean_fp) / 255.0
     nir_std = np.loadtxt(args.nir_std_fp) / 255.0
 
-    std = [0.5, 0.5, 0.5]
     if args.valid_classes_filepath is not None:
         valid_classes = np.loadtxt(args.valid_classes_filepath, dtype=str)
         is_valid_file_fn = class_filter(valid_classes)
