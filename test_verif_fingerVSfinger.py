@@ -1,4 +1,4 @@
-from cogan_demo.dataset import get_dataset
+from cogan.dataset import get_dataset
 import argparse
 # from utils import *
 import torch
@@ -6,8 +6,8 @@ import torch.nn as nn
 import torchvision.models as models
 import torch.nn.functional as F
 
-from cogan_demo.model import Mapper
-from cogan_demo.utils import *
+from cogan.model import Mapper
+from cogan.utils import *
 
 
 #################################################################################################

@@ -6,9 +6,9 @@ import torchvision.models as models
 import torch.nn.functional as F
 from torchvision.utils import save_image
 
-from cogan_demo.dataset import get_dataset
-from cogan_demo.utils import *
-from cogan_demo.model import *
+from cogan.dataset import get_dataset
+from cogan.utils import *
+from cogan.model import *
 
 
 #################################################################################################

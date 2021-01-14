@@ -6,8 +6,8 @@ import random as python_random
 import matplotlib.pyplot as plt
 import sklearn.metrics as metrics
 
-from cogan_demo.dataset import get_dataset
-from cogan_demo.model import *
+from cogan.dataset import get_dataset
+from cogan.model import *
 
 
 def extract_bn_features(self):
