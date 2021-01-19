@@ -1,7 +1,9 @@
 import os
 import argparse
+import torchvision
 import numpy as np
 import random as python_random
+from torch.utils.tensorboard import SummaryWriter
 
 from cogan.dataset import get_dataset
 from cogan.utils import *
@@ -14,28 +16,30 @@ parser.add_argument('--margin', default=100, type=int, help='batch size')
 parser.add_argument('--delta_1', default=1, type=float, help='Adversarial Coefficient')
 parser.add_argument('--delta_2', default=1, type=float, help='L2 Coefficient')
 parser.add_argument('--nir_dir', type=str,
-                    default='/home/hulk2/data/periocular/hk/images/dev/NIR',
+                    default='/home/hulk1/data/periocular/hk/images/dev/NIR',
                     help='path to data')
 parser.add_argument('--vis_dir', type=str,
-                    default='/home/hulk2/data/periocular/hk/images/dev/VIS',
+                    default='/home/hulk1/data/periocular/hk/images/dev/VIS',
                     help='path to data')
 parser.add_argument('--valid_classes_filepath', type=str,
                     help='text file of class labels to include in dataset')
 parser.add_argument('--ckpt_dir', type=str,
                     default='./checkpoint/',
-                    help='path to save the data')
+                    help='path to save the checkpoint')
+parser.add_argument('--logs_folder', default='logs', type=str,
+                    help='folder within ckpt_dir to save the logs')
 parser.add_argument('--nir_mean_fp', type=str,
-                    default='/home/hulk2/data/periocular/hk/images/dev/nir_mean.txt',
-                    help='Path to file containing channelwise image statistic')
+                    default='/home/hulk1/data/periocular/hk/stats/nir_mean.txt',
+                    help='Path to file containing channel-wise image statistic')
 parser.add_argument('--nir_std_fp', type=str,
-                    default='/home/hulk2/data/periocular/hk/images/dev/nir_std.txt',
-                    help='Path to file containing channelwise image statistic')
+                    default='/home/hulk1/data/periocular/hk/stats/nir_std.txt',
+                    help='Path to file containing channel-wise image statistic')
 parser.add_argument('--vis_mean_fp', type=str,
-                    default='/home/hulk2/data/periocular/hk/images/dev/vis_mean.txt',
-                    help='Path to file containing channelwise image statistic')
+                    default='/home/hulk1/data/periocular/hk/stats/vis_mean.txt',
+                    help='Path to file containing channel-wise image statistic')
 parser.add_argument('--vis_std_fp', type=str,
-                    default='/home/hulk2/data/periocular/hk/images/dev/vis_std.txt',
-                    help='Path to file containing channelwise image statistic')
+                    default='/home/hulk1/data/periocular/hk/stats/vis_std.txt',
+                    help='Path to file containing channel-wise image statistic')
 
 # model setup
 parser.add_argument('--basenet', default='resnet18', type=str,
@@ -53,6 +57,13 @@ torch.manual_seed(62484)
 gpu0 = torch.device('cuda:0')
 gpu1 = torch.device('cuda:1')
 cpu = torch.device('cpu')
+
+model_name = '{}_{}_{}_{}_{}'.format(
+        args.basenet, args.margin, args.delta_1, args.delta_2, args.feat_dim
+    )
+model_dir = os.path.join(args.ckpt_dir, model_name)
+
+writer = SummaryWriter(log_dir=os.path.join(model_dir, args.logs_folder))
 
 net_photo = Mapper(prenet='resnet18', outdim=args.feat_dim)
 # net_photo = UNet(feat_dim=args.feat_dim)
@@ -129,21 +140,32 @@ for epoch in range(500):
         pred_fake_photo = disc_photo(fake_photo)
         pred_fake_print = disc_print(fake_print)
 
+        gen_adversarial_photo_loss = adversarial_photo_loss(pred_fake_photo,
+                                                            valid.to(gpu0)).to(cpu)
+        gen_adversarial_print_loss = adversarial_print_loss(pred_fake_print,
+                                                            valid.to(gpu1)).to(cpu)
+
+        gen_l2_photo_loss = l2_photo_loss(fake_photo, img_photo).to(cpu)
+        gen_l2_print_loss = l2_print_loss(fake_print, img_print).to(cpu)
+
         adversarial_loss = (
-            adversarial_photo_loss(pred_fake_photo, valid.to(gpu0)).to(cpu) +
-            adversarial_print_loss(pred_fake_print, valid.to(gpu1)).to(cpu)
+            gen_adversarial_photo_loss +
+            gen_adversarial_print_loss
         ) / 2
+
         l2_loss = (
-            l2_photo_loss(fake_photo, img_photo).to(cpu) +
-            l2_print_loss(fake_print, img_print).to(cpu)
+            gen_l2_photo_loss +
+            gen_l2_print_loss
         ) / 2
 
         dist = ((y_photo.to(cpu) - y_print.to(cpu)) ** 2).sum(1)
 
         margin = torch.ones_like(dist, device=cpu) * args.margin
 
-        loss = lbl * dist + (1 - lbl) * F.relu(margin - dist)
-        loss = loss.mean() + adversarial_loss * args.delta_1 + l2_loss * args.delta_2
+        identity_loss = (lbl * dist + (1 - lbl) * F.relu(margin - dist)).mean()
+        loss = (identity_loss +
+                adversarial_loss * args.delta_1 +
+                l2_loss * args.delta_2)
 
         optimizer_G.zero_grad()
         loss.backward()
@@ -165,11 +187,20 @@ for epoch in range(500):
         pred_real_print = disc_print(img_print)
         pred_fake_print = disc_print(fake_print.detach())
 
+        discriminator_real_photo_loss = adversarial_photo_loss(pred_real_photo,
+                                                               valid.to(gpu0)).to(cpu)
+        discriminator_real_print_loss = adversarial_print_loss(pred_real_print,
+                                                               valid.to(gpu1)).to(cpu)
+        discriminator_fake_photo_loss = adversarial_photo_loss(pred_fake_photo,
+                                                               fake.to(gpu0)).to(cpu)
+        discriminator_fake_print_loss = adversarial_print_loss(pred_fake_print,
+                                                               fake.to(gpu1)).to(cpu)
+
         d_loss = (
-            adversarial_photo_loss(pred_real_photo, valid.to(gpu0)).to(cpu) +
-            adversarial_print_loss(pred_real_print, valid.to(gpu1)).to(cpu) +
-            adversarial_photo_loss(pred_fake_photo, fake.to(gpu0)).to(cpu) +
-            adversarial_print_loss(pred_fake_print, fake.to(gpu1)).to(cpu)
+            discriminator_real_photo_loss +
+            discriminator_real_print_loss +
+            discriminator_fake_photo_loss +
+            discriminator_fake_print_loss
         ) / 4
 
         optimizer_D.zero_grad()
@@ -183,6 +214,45 @@ for epoch in range(500):
                 'Epoch: %02d, iter: %02d/%02d, D loss: %.4f, G loss: %.4f, acc: %.4f'
                 % (epoch, step, len(train_loader), loss_m_d.avg, loss_m_g.avg, acc_m.avg)
             )
+        if step % 100 == 0:
+            writer.add_scalar('loss/generator/adversarial_photo',
+                              gen_adversarial_photo_loss,
+                              step)
+            writer.add_scalar('loss/generator/adversarial_print',
+                              gen_adversarial_print_loss,
+                              step)
+            writer.add_scalar('loss/generator/adversarial',
+                              adversarial_loss,
+                              step)
+            writer.add_scalar('loss/generator/l2_photo', gen_l2_photo_loss, step)
+            writer.add_scalar('loss/generator/l2_print', gen_l2_print_loss, step)
+            writer.add_scalar('loss/generator/l2', l2_loss, step)
+            writer.add_scalar('loss/generator/identity', identity_loss, step)
+            writer.add_scalar('loss/generator/total', loss, step)
+            writer.add_scalar('loss/discriminator/real_photo',
+                              discriminator_real_photo_loss,
+                              step)
+            writer.add_scalar('loss/discriminator/real_print',
+                              discriminator_real_print_loss,
+                              step)
+            writer.add_scalar('loss/discriminator/fake_photo',
+                              discriminator_fake_photo_loss,
+                              step)
+            writer.add_scalar('loss/discriminator/fake_print',
+                              discriminator_fake_print_loss,
+                              step)
+            writer.add_scalar('loss/discriminator/total', d_loss, step)
+            writer.add_scalar('accuracy', acc, step)
+
+            real_photo_grid = torchvision.utils.make_grid(img_photo[:25], nrow=5)
+            real_print_grid = torchvision.utils.make_grid(img_print[:25], nrow=5)
+            fake_photo_grid = torchvision.utils.make_grid(fake_photo[:25], nrow=5)
+            fake_print_grid = torchvision.utils.make_grid(fake_print[:25], nrow=5)
+
+            writer.add_image('real photo', real_photo_grid, step)
+            writer.add_image('real print', real_print_grid, step)
+            writer.add_image('fake photo', fake_photo_grid, step)
+            writer.add_image('fake print', fake_print_grid, step)
 
     state = {
         'net_photo': net_photo.state_dict(),
@@ -192,10 +262,6 @@ for epoch in range(500):
         'optimizer': optimizer_G.state_dict()
     }
 
-    model_name = '{}_{}_{}_{}_{}'.format(
-        args.basenet, args.margin, args.delta_1, args.delta_2, args.feat_dim
-    )
-    model_dir = os.path.join(args.ckpt_dir, model_name)
     data_split = os.path.splitext(os.path.basename(args.valid_classes_filepath))[0]
     ckpt_dir = os.path.join(model_dir, data_split)
     ckpt_fp = os.path.join(ckpt_dir, 'checkpoint.pt')

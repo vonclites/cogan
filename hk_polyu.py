@@ -5,10 +5,10 @@ import random as python_random
 from skimage.io import imread
 from sklearn.model_selection import KFold, train_test_split
 
-SESSION1_DIR = '/home/hulk2/data/periocular/hk/PolyU_Cross_Session_1/PolyU_Cross_Iris'
-SESSION2_DIR = '/home/hulk2/data/periocular/hk/PolyU_Cross_Session_2/PolyU_Cross_Iris'
-IMAGE_DIR = '/home/hulk2/data/periocular/hk/images'
-PROTOCOL_DIR = '/home/hulk2/data/periocular/hk/protocols'
+SESSION1_DIR = '/home/hulk1/data/periocular/hk/PolyU_Cross_Session_1/PolyU_Cross_Iris'
+SESSION2_DIR = '/home/hulk1/data/periocular/hk/PolyU_Cross_Session_2/PolyU_Cross_Iris'
+IMAGE_DIR = '/home/hulk1/data/periocular/hk/images'
+PROTOCOL_DIR = '/home/hulk1/data/periocular/hk/protocols'
 NUM_TEST_SUBJECTS = 40
 
 
@@ -60,7 +60,6 @@ def calculate_image_stats(domain_dir):
     mean = np.mean(images, axis=(0, 1, 2))
     std = np.std(images, axis=(0, 1, 2))
     return mean, std
-
 
 def run():
     python_random.seed(62484)
