@@ -25,8 +25,6 @@ parser.add_argument('--valid_classes_filepath', type=str,
                     help='text file of class labels to include in dataset')
 parser.add_argument('--model_dir', type=str,
                     help='base directory path in which individual runs will be saved')
-parser.add_argument('--logs_folder', default='logs', type=str,
-                    help='folder within ckpt_dir to save the logs')
 parser.add_argument('--nir_mean_fp', type=str,
                     default='/home/hulk1/data/periocular/hk/stats/nir_mean.txt',
                     help='Path to file containing channel-wise image statistic')
@@ -61,8 +59,11 @@ model_name = '{}_{}_{}_{}_{}'.format(
         args.basenet, args.margin, args.delta_1, args.delta_2, args.feat_dim
     )
 model_dir = os.path.join(args.model_dir, model_name)
+data_split = os.path.splitext(os.path.basename(args.valid_classes_filepath))[0]
+ckpt_dir = os.path.join(model_dir, data_split)
+os.makedirs(ckpt_dir, exist_ok=True)
 
-writer = SummaryWriter(log_dir=os.path.join(model_dir, args.logs_folder))
+writer = SummaryWriter(log_dir=ckpt_dir)
 
 net_photo = Mapper(prenet='resnet18', outdim=args.feat_dim)
 # net_photo = UNet(feat_dim=args.feat_dim)
@@ -261,9 +262,6 @@ for epoch in range(500):
         'optimizer': optimizer_G.state_dict()
     }
 
-    data_split = os.path.splitext(os.path.basename(args.valid_classes_filepath))[0]
-    ckpt_dir = os.path.join(model_dir, data_split)
     ckpt_fp = os.path.join(ckpt_dir, 'checkpoint.pt')
-    os.makedirs(ckpt_dir, exist_ok=True)
     torch.save(state, ckpt_fp)
     print('\nModel saved!\n')
