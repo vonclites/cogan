@@ -23,9 +23,8 @@ parser.add_argument('--vis_dir', type=str,
                     help='path to data')
 parser.add_argument('--valid_classes_filepath', type=str,
                     help='text file of class labels to include in dataset')
-parser.add_argument('--ckpt_dir', type=str,
-                    default='./checkpoint/',
-                    help='path to save the checkpoint')
+parser.add_argument('--model_dir', type=str,
+                    help='base directory path in which individual runs will be saved')
 parser.add_argument('--logs_folder', default='logs', type=str,
                     help='folder within ckpt_dir to save the logs')
 parser.add_argument('--nir_mean_fp', type=str,
@@ -61,7 +60,7 @@ cpu = torch.device('cpu')
 model_name = '{}_{}_{}_{}_{}'.format(
         args.basenet, args.margin, args.delta_1, args.delta_2, args.feat_dim
     )
-model_dir = os.path.join(args.ckpt_dir, model_name)
+model_dir = os.path.join(args.model_dir, model_name)
 
 writer = SummaryWriter(log_dir=os.path.join(model_dir, args.logs_folder))
 
