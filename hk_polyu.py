@@ -61,6 +61,7 @@ def calculate_image_stats(domain_dir):
     std = np.std(images, axis=(0, 1, 2))
     return mean, std
 
+
 def run():
     python_random.seed(62484)
     np.random.seed(62484)

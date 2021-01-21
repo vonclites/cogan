@@ -3,6 +3,7 @@ import argparse
 import torchvision
 import numpy as np
 import random as python_random
+import sklearn.metrics as metrics
 from torch.utils.tensorboard import SummaryWriter
 
 from cogan.dataset import get_dataset
@@ -16,6 +17,44 @@ CPU = torch.device('cpu')
 Tensor = torch.cuda.FloatTensor
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description='Contrastive view')
+    parser.add_argument('--batch_size', default=128, type=int, help='batch size')
+    parser.add_argument('--margin', default=100, type=int, help='batch size')
+    parser.add_argument('--delta_1', default=1, type=float, help='Adversarial Coefficient')
+    parser.add_argument('--delta_2', default=1, type=float, help='L2 Coefficient')
+    parser.add_argument('--nir_dir', type=str,
+                        default='/home/hulk1/data/periocular/hk/images/dev/NIR',
+                        help='path to data')
+    parser.add_argument('--vis_dir', type=str,
+                        default='/home/hulk1/data/periocular/hk/images/dev/VIS',
+                        help='path to data')
+    parser.add_argument('--valid_train_classes_fp', type=str,
+                        help='text file of class labels to include in training dataset')
+    parser.add_argument('--valid_test_classes_fp', type=str,
+                        help='text file of class labels to include in test (validation) dataset')
+    parser.add_argument('--model_dir', type=str,
+                        help='base directory path in which individual runs will be saved')
+    parser.add_argument('--nir_mean_fp', type=str,
+                        default='/home/hulk1/data/periocular/hk/stats/nir_mean.txt',
+                        help='Path to file containing channel-wise image statistic')
+    parser.add_argument('--nir_std_fp', type=str,
+                        default='/home/hulk1/data/periocular/hk/stats/nir_std.txt',
+                        help='Path to file containing channel-wise image statistic')
+    parser.add_argument('--vis_mean_fp', type=str,
+                        default='/home/hulk1/data/periocular/hk/stats/vis_mean.txt',
+                        help='Path to file containing channel-wise image statistic')
+    parser.add_argument('--vis_std_fp', type=str,
+                        default='/home/hulk1/data/periocular/hk/stats/vis_std.txt',
+                        help='Path to file containing channel-wise image statistic')
+    parser.add_argument('--basenet', default='resnet18', type=str,
+                        help='e.g., resnet50, resnext50, resnext101'
+                             'and their wider variants, resnet50x4')
+    parser.add_argument('-d', '--feat_dim', default=128, type=int,
+                        help='feature dimension for contrastive loss')
+    return parser.parse_args()
+
+
 class Model(object):
     def __init__(self, ckpt_dir, feat_dim):
         self.adversarial_photo_loss = torch.nn.MSELoss().to(GPU0)
@@ -24,6 +63,7 @@ class Model(object):
         self.l2_print_loss = torch.nn.MSELoss().to(GPU1)
 
         self.writer = SummaryWriter(log_dir=ckpt_dir)
+        self.eval_writer = SummaryWriter(log_dir=os.path.join(ckpt_dir, 'eval'))
 
         self.net_photo = Mapper(prenet='resnet18', outdim=feat_dim)
         self.net_photo.to(GPU0)
@@ -66,6 +106,24 @@ class Model(object):
         self.d_fake_print_loss_meter = AverageMeter()
 
         self.accuracy_meter = AverageMeter()
+
+    def _reset_meters(self):
+        self.g_loss_meter.reset()
+        self.g_id_loss_meter.reset()
+        self.g_adv_photo_loss_meter.reset()
+        self.g_adv_print_loss_meter.reset()
+        self.g_adv_loss_raw_meter.reset()
+        self.g_adv_loss_meter.reset()
+        self.g_l2_photo_loss_meter.reset()
+        self.g_l2_print_loss_meter.reset()
+        self.g_l2_loss_raw_meter.reset()
+        self.g_l2_loss_meter.reset()
+        self.d_loss_meter.reset()
+        self.d_real_photo_loss_meter.reset()
+        self.d_real_print_loss_meter.reset()
+        self.d_fake_photo_loss_meter.reset()
+        self.d_fake_print_loss_meter.reset()
+        self.accuracy_meter.reset()
 
     def train_epoch(self, train_loader, delta_1, delta_2, margin, epoch):
         self.net_photo.train()
@@ -241,61 +299,55 @@ class Model(object):
         self.optimizer_d.step()
         return fake_photo, fake_print
 
-    def _reset_meters(self):
-        self.g_loss_meter.reset()
-        self.g_id_loss_meter.reset()
-        self.g_adv_photo_loss_meter.reset()
-        self.g_adv_print_loss_meter.reset()
-        self.g_adv_loss_raw_meter.reset()
-        self.g_adv_loss_meter.reset()
-        self.g_l2_photo_loss_meter.reset()
-        self.g_l2_print_loss_meter.reset()
-        self.g_l2_loss_raw_meter.reset()
-        self.g_l2_loss_meter.reset()
-        self.d_loss_meter.reset()
-        self.d_real_photo_loss_meter.reset()
-        self.d_real_print_loss_meter.reset()
-        self.d_fake_photo_loss_meter.reset()
-        self.d_fake_print_loss_meter.reset()
-        self.accuracy_meter.reset()
+    def eval(self, test_loader, global_step):
+        self.net_photo.eval()
+        self.net_print.eval()
+        self.disc_photo.eval()
+        self.disc_print.eval()
 
+        with torch.no_grad():
+            dist_l = []
+            lbl_l = []
+            for img_photo, img_print, lbl in test_loader:
+                bs = img_photo.size(0)
+                lbl = lbl.type(torch.float)
+                lbl = lbl.to(CPU)
+                img_photo = img_photo.to(GPU0)
+                img_print = img_print.to(GPU1)
 
-def parse_args():
-    parser = argparse.ArgumentParser(description='Contrastive view')
-    parser.add_argument('--batch_size', default=128, type=int, help='batch size')
-    parser.add_argument('--margin', default=100, type=int, help='batch size')
-    parser.add_argument('--delta_1', default=1, type=float, help='Adversarial Coefficient')
-    parser.add_argument('--delta_2', default=1, type=float, help='L2 Coefficient')
-    parser.add_argument('--nir_dir', type=str,
-                        default='/home/hulk1/data/periocular/hk/images/dev/NIR',
-                        help='path to data')
-    parser.add_argument('--vis_dir', type=str,
-                        default='/home/hulk1/data/periocular/hk/images/dev/VIS',
-                        help='path to data')
-    parser.add_argument('--valid_train_classes_fp', type=str,
-                        help='text file of class labels to include in training dataset')
-    parser.add_argument('--valid_test_classes_fp', type=str,
-                        help='text file of class labels to include in test (validation) dataset')
-    parser.add_argument('--model_dir', type=str,
-                        help='base directory path in which individual runs will be saved')
-    parser.add_argument('--nir_mean_fp', type=str,
-                        default='/home/hulk1/data/periocular/hk/stats/nir_mean.txt',
-                        help='Path to file containing channel-wise image statistic')
-    parser.add_argument('--nir_std_fp', type=str,
-                        default='/home/hulk1/data/periocular/hk/stats/nir_std.txt',
-                        help='Path to file containing channel-wise image statistic')
-    parser.add_argument('--vis_mean_fp', type=str,
-                        default='/home/hulk1/data/periocular/hk/stats/vis_mean.txt',
-                        help='Path to file containing channel-wise image statistic')
-    parser.add_argument('--vis_std_fp', type=str,
-                        default='/home/hulk1/data/periocular/hk/stats/vis_std.txt',
-                        help='Path to file containing channel-wise image statistic')
-    parser.add_argument('--basenet', default='resnet18', type=str,
-                        help='e.g., resnet50, resnext50, resnext101'
-                             'and their wider variants, resnet50x4')
-    parser.add_argument('-d', '--feat_dim', default=128, type=int,
-                        help='feature dimension for contrastive loss')
-    return parser.parse_args()
+                valid = Variable(Tensor(bs, 1).fill_(1.0), requires_grad=False)
+                fake = Variable(Tensor(bs, 1).fill_(0.0), requires_grad=False)
+
+                fake_photo, y_photo = self.net_photo(img_photo)
+                fake_print, y_print = self.net_print(img_print)
+
+                pred_fake_photo = self.disc_photo(fake_photo)
+                pred_fake_print = self.disc_print(fake_print)
+
+                y_photo = y_photo.to(CPU)
+                y_print = y_print.to(CPU)
+                dist = ((y_photo - y_print) ** 2).sum(1)
+                dist_l.append(dist.data)
+                lbl_l.append((1 - lbl).data)
+
+            dist = torch.cat(dist_l, 0)
+            lbl = torch.cat(lbl_l, 0)
+            dist = dist.cpu().detach().numpy()
+            lbl = lbl.cpu().detach().numpy()
+
+            fpr, tpr, threshold = metrics.roc_curve(lbl, dist)
+            roc_auc = metrics.auc(fpr, tpr)
+
+            fig = plt.figure()
+            ax: plt.Axes = fig.add_subplot()
+            ax.plot(fpr, tpr, 'b', label='AUC = %0.2f' % roc_auc)
+            ax.legend(loc='lower right')
+            ax.plot([0, 1], [0, 1], 'r--')
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.set_ylabel('True Positive Rate')
+            ax.set_xlabel('False Positive Rate')
+            self.eval_writer.add_figure('ROC Curve', fig, global_step=global_step)
 
 
 def run():
@@ -309,8 +361,27 @@ def run():
     ckpt_dir = os.path.join(model_dir, data_split)
     os.makedirs(ckpt_dir, exist_ok=True)
 
-    train_loader = get_dataset(args)
-    print(len(train_loader))
+    train_loader = get_dataset(
+        batch_size=args.batch_size,
+        vis_dir=args.vis_dir,
+        nir_dir=args.nir_dir,
+        valid_classes_fp=args.valid_train_classes_fp,
+        vis_mean_fp=args.vis_mean_fp,
+        vis_std_fp=args.vis_std_fp,
+        nir_mean_fp=args.nir_mean_fp,
+        nir_std_fp=args.nir_std_fp
+    )
+    test_loader = get_dataset(
+        batch_size=args.batch_size,
+        vis_dir=args.vis_dir,
+        nir_dir=args.nir_dir,
+        valid_classes_fp=args.valid_test_classes_fp,
+        vis_mean_fp=args.vis_mean_fp,
+        vis_std_fp=args.vis_std_fp,
+        nir_mean_fp=args.nir_mean_fp,
+        nir_std_fp=args.nir_std_fp
+    )
+    steps_per_epoch = len(train_loader)
 
     patch = (1, 256 // 2 ** 4, 256 // 2 ** 4)
 
@@ -318,7 +389,8 @@ def run():
 
     for epoch in range(500):
         model.train_epoch(train_loader, args.delta_1, args.delta_2, args.margin, epoch)
-
+        model.eval(test_loader,
+                   global_step=epoch * steps_per_epoch + steps_per_epoch)
         state = {
             'net_photo': model.net_photo.state_dict(),
             'net_print': model.net_print.state_dict(),
@@ -332,6 +404,7 @@ def run():
         print('\nModel saved!\n')
 
     model.writer.close()
+    model.eval_writer.close()
 
 
 if __name__ == '__main__':
