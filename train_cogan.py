@@ -152,10 +152,30 @@ class Model(object):
                        self.g_loss_meter.avg,
                        self.accuracy_meter.avg)
                 )
-        real_photo_grid = torchvision.utils.make_grid(img_photo[:16], nrow=4)
-        real_print_grid = torchvision.utils.make_grid(img_print[:16], nrow=4)
-        fake_photo_grid = torchvision.utils.make_grid(fake_photo[:16], nrow=4)
-        fake_print_grid = torchvision.utils.make_grid(fake_print[:16], nrow=4)
+        real_photo_grid = torchvision.utils.make_grid(
+            tensor=img_photo[:16],
+            nrow=4,
+            normalize=True,
+            range=(-1, 1)
+        )
+        real_print_grid = torchvision.utils.make_grid(
+            tensor=img_print[:16],
+            nrow=4,
+            normalize=True,
+            range=(-1, 1)
+        )
+        fake_photo_grid = torchvision.utils.make_grid(
+            tensor=fake_photo[:16],
+            nrow=4,
+            normalize=True,
+            range=(-1, 1)
+        )
+        fake_print_grid = torchvision.utils.make_grid(
+            tensor=fake_print[:16],
+            nrow=4,
+            normalize=True,
+            range=(-1, 1)
+        )
 
         self.writer.add_image('real photo', real_photo_grid, global_step)
         self.writer.add_image('real print', real_print_grid, global_step)
