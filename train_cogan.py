@@ -3,11 +3,12 @@ import argparse
 import torchvision
 import numpy as np
 import random as python_random
+import matplotlib.pyplot as plt
 import sklearn.metrics as metrics
 from torch.utils.tensorboard import SummaryWriter
 
+from cogan import utils
 from cogan.dataset import get_dataset
-from cogan.utils import *
 from cogan.model import *
 
 GPU0 = torch.device('cuda:0')
@@ -88,24 +89,24 @@ class Model(object):
             weight_decay=1e-4
         )
 
-        self.g_loss_meter = AverageMeter()
-        self.g_id_loss_meter = AverageMeter()
-        self.g_adv_photo_loss_meter = AverageMeter()
-        self.g_adv_print_loss_meter = AverageMeter()
-        self.g_adv_loss_raw_meter = AverageMeter()
-        self.g_adv_loss_meter = AverageMeter()
-        self.g_l2_photo_loss_meter = AverageMeter()
-        self.g_l2_print_loss_meter = AverageMeter()
-        self.g_l2_loss_raw_meter = AverageMeter()
-        self.g_l2_loss_meter = AverageMeter()
+        self.g_loss_meter = utils.AverageMeter()
+        self.g_id_loss_meter = utils.AverageMeter()
+        self.g_adv_photo_loss_meter = utils.AverageMeter()
+        self.g_adv_print_loss_meter = utils.AverageMeter()
+        self.g_adv_loss_raw_meter = utils.AverageMeter()
+        self.g_adv_loss_meter = utils.AverageMeter()
+        self.g_l2_photo_loss_meter = utils.AverageMeter()
+        self.g_l2_print_loss_meter = utils.AverageMeter()
+        self.g_l2_loss_raw_meter = utils.AverageMeter()
+        self.g_l2_loss_meter = utils.AverageMeter()
 
-        self.d_loss_meter = AverageMeter()
-        self.d_real_photo_loss_meter = AverageMeter()
-        self.d_real_print_loss_meter = AverageMeter()
-        self.d_fake_photo_loss_meter = AverageMeter()
-        self.d_fake_print_loss_meter = AverageMeter()
+        self.d_loss_meter = utils.AverageMeter()
+        self.d_real_photo_loss_meter = utils.AverageMeter()
+        self.d_real_print_loss_meter = utils.AverageMeter()
+        self.d_fake_photo_loss_meter = utils.AverageMeter()
+        self.d_fake_print_loss_meter = utils.AverageMeter()
 
-        self.accuracy_meter = AverageMeter()
+        self.accuracy_meter = utils.AverageMeter()
 
     def _reset_meters(self):
         self.g_loss_meter.reset()
@@ -245,9 +246,9 @@ class Model(object):
         self.g_adv_print_loss_meter.update(g_adv_print_loss.item())
 
         g_adv_loss_raw = (
-                                 g_adv_photo_loss +
-                                 g_adv_print_loss
-                         ) / 2
+            g_adv_photo_loss +
+            g_adv_print_loss
+        ) / 2
         self.g_adv_loss_raw_meter.update(g_adv_loss_raw.item())
 
         g_adv_loss = g_adv_loss_raw * delta_1
@@ -260,9 +261,9 @@ class Model(object):
         self.g_l2_print_loss_meter.update(g_l2_print_loss.item())
 
         g_l2_loss_raw = (
-                                g_l2_photo_loss +
-                                g_l2_print_loss
-                        ) / 2
+            g_l2_photo_loss +
+            g_l2_print_loss
+        ) / 2
         self.g_l2_loss_raw_meter.update(g_l2_loss_raw.item())
 
         g_l2_loss = g_l2_loss_raw * delta_2
@@ -307,11 +308,11 @@ class Model(object):
         self.d_fake_print_loss_meter.update(d_fake_print_loss.item())
 
         d_loss = (
-                         d_real_photo_loss +
-                         d_real_print_loss +
-                         d_fake_photo_loss +
-                         d_fake_print_loss
-                 ) / 4
+            d_real_photo_loss +
+            d_real_print_loss +
+            d_fake_photo_loss +
+            d_fake_print_loss
+        ) / 4
         self.d_loss_meter.update(d_loss.item())
 
         self.optimizer_d.zero_grad()
@@ -356,11 +357,12 @@ class Model(object):
             lbl = lbl.cpu().detach().numpy()
 
             fpr, tpr, threshold = metrics.roc_curve(lbl, dist)
-            roc_auc = metrics.auc(fpr, tpr)
+            auc = metrics.auc(fpr, tpr)
+            eer = utils.eer(fpr, tpr)
 
             fig = plt.figure()
             ax: plt.Axes = fig.add_subplot()
-            ax.plot(fpr, tpr, 'b', label='AUC = %0.2f' % roc_auc)
+            ax.plot(fpr, tpr, 'b', label='AUC = {:.2f} | EER = {:.2f}'.format(auc, eer))
             ax.legend(loc='lower right')
             ax.plot([0, 1], [0, 1], 'r--')
             ax.set_xlim(0, 1)
@@ -402,8 +404,6 @@ def run():
         nir_std_fp=args.nir_std_fp
     )
     steps_per_epoch = len(train_loader)
-
-    patch = (1, 256 // 2 ** 4, 256 // 2 ** 4)
 
     model = Model(ckpt_dir, args.feat_dim)
 
