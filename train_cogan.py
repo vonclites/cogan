@@ -24,11 +24,15 @@ Tensor = torch.cuda.FloatTensor
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Contrastive view')
+    parser = argparse.ArgumentParser()
     parser.add_argument('--batch_size', default=128, type=int, help='batch size')
     parser.add_argument('--margin', default=100, type=int, help='batch size')
-    parser.add_argument('--delta_1', default=1, type=float, help='Adversarial Coefficient')
-    parser.add_argument('--delta_2', default=1, type=float, help='L2 Coefficient')
+    parser.add_argument('--adversarial_coeff', default=1, type=float,
+                        help='Adversarial Loss Coefficient')
+    parser.add_argument('--pixel_coeff', default=1, type=float,
+                        help='Pixel-to-Pixel Loss Coefficient')
+    parser.add_argument('--perceptual_coeff', default=1, type=float,
+                        help='Perceptual Loss Coefficient')
     parser.add_argument('--nir_dir', type=str,
                         default='/home/hulk1/data/periocular/hk/images/dev/NIR',
                         help='path to data')
@@ -65,8 +69,8 @@ class Model(object):
     def __init__(self, ckpt_dir, feat_dim):
         self.adversarial_photo_loss = torch.nn.MSELoss().to(GPU0)
         self.adversarial_print_loss = torch.nn.MSELoss().to(GPU1)
-        self.l2_photo_loss = torch.nn.MSELoss().to(GPU0)
-        self.l2_print_loss = torch.nn.MSELoss().to(GPU1)
+        self.pixel_photo_loss = torch.nn.MSELoss().to(GPU0)
+        self.pixel_print_loss = torch.nn.MSELoss().to(GPU1)
 
         self.writer = SummaryWriter(log_dir=ckpt_dir)
         self.eval_writer = SummaryWriter(log_dir=os.path.join(ckpt_dir, 'eval'))
@@ -87,6 +91,13 @@ class Model(object):
         self.disc_print = Discriminator(in_channels=3)
         self.disc_print.to(GPU1)
 
+        self.perceptual_net_photo = models.vgg16(pretrained=True).features.to(GPU0)
+        self.perceptual_net_print = models.vgg16(pretrained=True).features.to(GPU1)
+        self.perceptual_net_photo = self.perceptual_net_photo.eval()
+        self.perceptual_net_print = self.perceptual_net_print.eval()
+        self.perceptual_photo_loss = torch.nn.MSELoss().to(GPU0)
+        self.perceptual_print_loss = torch.nn.MSELoss().to(GPU1)
+
         self.optimizer_g = torch.optim.Adam(
             params=list(self.net_photo.parameters()) + list(self.net_print.parameters()),
             lr=1e-4,
@@ -104,10 +115,14 @@ class Model(object):
         self.g_adv_print_loss_meter = utils.AverageMeter()
         self.g_adv_loss_raw_meter = utils.AverageMeter()
         self.g_adv_loss_meter = utils.AverageMeter()
-        self.g_l2_photo_loss_meter = utils.AverageMeter()
-        self.g_l2_print_loss_meter = utils.AverageMeter()
-        self.g_l2_loss_raw_meter = utils.AverageMeter()
-        self.g_l2_loss_meter = utils.AverageMeter()
+        self.g_pixel_photo_loss_meter = utils.AverageMeter()
+        self.g_pixel_print_loss_meter = utils.AverageMeter()
+        self.g_pixel_loss_raw_meter = utils.AverageMeter()
+        self.g_pixel_loss_meter = utils.AverageMeter()
+        self.g_perceptual_photo_loss_meter = utils.AverageMeter()
+        self.g_perceptual_print_loss_meter = utils.AverageMeter()
+        self.g_perceptual_loss_raw_meter = utils.AverageMeter()
+        self.g_perceptual_loss_meter = utils.AverageMeter()
 
         self.d_loss_meter = utils.AverageMeter()
         self.d_real_photo_loss_meter = utils.AverageMeter()
@@ -124,10 +139,14 @@ class Model(object):
         self.g_adv_print_loss_meter.reset()
         self.g_adv_loss_raw_meter.reset()
         self.g_adv_loss_meter.reset()
-        self.g_l2_photo_loss_meter.reset()
-        self.g_l2_print_loss_meter.reset()
-        self.g_l2_loss_raw_meter.reset()
-        self.g_l2_loss_meter.reset()
+        self.g_pixel_photo_loss_meter.reset()
+        self.g_pixel_print_loss_meter.reset()
+        self.g_pixel_loss_raw_meter.reset()
+        self.g_pixel_loss_meter.reset()
+        self.g_perceptual_photo_loss_meter.reset()
+        self.g_perceptual_print_loss_meter.reset()
+        self.g_perceptual_loss_raw_meter.reset()
+        self.g_perceptual_loss_meter.reset()
         self.d_loss_meter.reset()
         self.d_real_photo_loss_meter.reset()
         self.d_real_print_loss_meter.reset()
@@ -135,7 +154,13 @@ class Model(object):
         self.d_fake_print_loss_meter.reset()
         self.accuracy_meter.reset()
 
-    def train_epoch(self, train_loader, delta_1, delta_2, margin, epoch):
+    def train_epoch(self,
+                    train_loader,
+                    adversarial_coeff,
+                    pixel_coeff,
+                    perceptual_coeff,
+                    margin,
+                    epoch):
         self.net_photo.train()
         self.net_print.train()
         self.disc_photo.train()
@@ -151,8 +176,9 @@ class Model(object):
                 img_photo=img_photo,
                 img_print=img_print,
                 lbl=lbl,
-                delta_1=delta_1,
-                delta_2=delta_2,
+                adversarial_coeff=adversarial_coeff,
+                pixel_coeff=pixel_coeff,
+                perceptual_coeff=perceptual_coeff,
                 margin=margin)
             if step % 10 == 0:
                 print(
@@ -204,10 +230,14 @@ class Model(object):
         self.writer.add_scalar('generator/adversarial',
                                self.g_adv_loss_meter.avg,
                                global_step)
-        self.writer.add_scalar('generator/l2_photo', self.g_l2_photo_loss_meter.avg, global_step)
-        self.writer.add_scalar('generator/l2_print', self.g_l2_print_loss_meter.avg, global_step)
-        self.writer.add_scalar('generator/l2_raw', self.g_l2_loss_raw_meter.avg, global_step)
-        self.writer.add_scalar('generator/l2', self.g_l2_loss_meter.avg, global_step)
+        self.writer.add_scalar('generator/pixel_photo', self.g_pixel_photo_loss_meter.avg, global_step)
+        self.writer.add_scalar('generator/pixel_print', self.g_pixel_print_loss_meter.avg, global_step)
+        self.writer.add_scalar('generator/pixel_raw', self.g_pixel_loss_raw_meter.avg, global_step)
+        self.writer.add_scalar('generator/pixel', self.g_pixel_loss_meter.avg, global_step)
+        self.writer.add_scalar('generator/perceptual_photo', self.g_perceptual_photo_loss_meter.avg, global_step)
+        self.writer.add_scalar('generator/perceptual_print', self.g_perceptual_print_loss_meter.avg, global_step)
+        self.writer.add_scalar('generator/perceptual_raw', self.g_perceptual_loss_raw_meter.avg, global_step)
+        self.writer.add_scalar('generator/perceptual', self.g_perceptual_loss_meter.avg, global_step)
         self.writer.add_scalar('generator/identity', self.g_id_loss_meter.avg, global_step)
         self.writer.add_scalar('loss/generator', self.g_loss_meter.avg, global_step)
 
@@ -228,7 +258,14 @@ class Model(object):
         self.writer.add_scalar('accuracy', self.accuracy_meter.avg, global_step)
         self.writer.flush()
 
-    def _train_step(self, img_photo, img_print, lbl, delta_1, delta_2, margin):
+    def _train_step(self,
+                    img_photo,
+                    img_print,
+                    lbl,
+                    adversarial_coeff,
+                    pixel_coeff,
+                    perceptual_coeff,
+                    margin):
         bs = img_photo.size(0)
         lbl = lbl.type(torch.float)
         lbl = lbl.to(CPU)
@@ -236,6 +273,7 @@ class Model(object):
         img_print = img_print.to(GPU1)
 
         valid = Variable(Tensor(bs, 1).fill_(1.0), requires_grad=False)
+        # valid = np.random.uniform(0.9, 1.0, size=(bs, 1))
         fake = Variable(Tensor(bs, 1).fill_(0.0), requires_grad=False)
 
         fake_photo, y_photo = self.net_photo(img_photo)
@@ -244,9 +282,17 @@ class Model(object):
         pred_fake_photo = self.disc_photo(fake_photo)
         pred_fake_print = self.disc_print(fake_print)
 
+        photo_features = self.perceptual_net_photo(img_photo)
+        fake_photo_features = self.perceptual_net_photo(fake_photo)
+
+        print_features = self.perceptual_net_print(img_print)
+        fake_print_features = self.perceptual_net_print(fake_print)
+
         # """"""""""""""""""
         # "   Generator    "
         # """"""""""""""""""
+
+        # Adversarial Loss
         g_adv_photo_loss = self.adversarial_photo_loss(pred_fake_photo,
                                                        valid.to(GPU0)).to(CPU)
         g_adv_print_loss = self.adversarial_print_loss(pred_fake_print,
@@ -260,32 +306,50 @@ class Model(object):
         ) / 2
         self.g_adv_loss_raw_meter.update(g_adv_loss_raw.item())
 
-        g_adv_loss = g_adv_loss_raw * delta_1
+        g_adv_loss = g_adv_loss_raw * adversarial_coeff
         self.g_adv_loss_meter.update(g_adv_loss.item())
 
-        g_l2_photo_loss = self.l2_photo_loss(fake_photo, img_photo).to(CPU)
-        g_l2_print_loss = self.l2_print_loss(fake_print, img_print).to(CPU)
+        # Pixel Loss
+        g_pixel_photo_loss = self.pixel_photo_loss(fake_photo, img_photo).to(CPU)
+        g_pixel_print_loss = self.pixel_print_loss(fake_print, img_print).to(CPU)
 
-        self.g_l2_photo_loss_meter.update(g_l2_photo_loss.item())
-        self.g_l2_print_loss_meter.update(g_l2_print_loss.item())
+        self.g_pixel_photo_loss_meter.update(g_pixel_photo_loss.item())
+        self.g_pixel_print_loss_meter.update(g_pixel_print_loss.item())
 
-        g_l2_loss_raw = (
-            g_l2_photo_loss +
-            g_l2_print_loss
-        ) / 2
-        self.g_l2_loss_raw_meter.update(g_l2_loss_raw.item())
+        g_pixel_loss_raw = (g_pixel_photo_loss + g_pixel_print_loss) / 2
+        self.g_pixel_loss_raw_meter.update(g_pixel_loss_raw.item())
 
-        g_l2_loss = g_l2_loss_raw * delta_2
-        self.g_l2_loss_meter.update(g_l2_loss.item())
+        g_pixel_loss = g_pixel_loss_raw * pixel_coeff
+        self.g_pixel_loss_meter.update(g_pixel_loss.item())
 
+        # Perceptual Loss
+        g_perceptual_photo_loss = self.perceptual_photo_loss(
+            input=fake_photo_features,
+            target=photo_features
+        ).to(CPU)
+        g_perceptual_print_loss = self.perceptual_print_loss(
+            input=fake_print_features,
+            target=print_features
+        ).to(CPU)
+
+        self.g_perceptual_photo_loss_meter.update(g_perceptual_photo_loss.item())
+        self.g_perceptual_print_loss_meter.update(g_perceptual_print_loss.item())
+
+        g_perceptual_loss_raw = (g_perceptual_photo_loss + g_perceptual_print_loss) / 2
+        self.g_perceptual_loss_raw_meter.update(g_perceptual_loss_raw.item())
+
+        g_perceptual_loss = g_perceptual_loss_raw * perceptual_coeff
+        self.g_perceptual_loss_meter.update(g_perceptual_loss.item())
+
+        # Identity Loss
         dist = ((y_photo.to(CPU) - y_print.to(CPU)) ** 2).sum(1)
-
         margin = torch.ones_like(dist, device=CPU) * margin
 
-        g_id_loss = (lbl * dist + (1 - lbl) * F.relu(margin - dist)).mean()
+        g_id_loss = (lbl * dist + (1 - lbl) * func.relu(margin - dist)).mean()
         self.g_id_loss_meter.update(g_id_loss.item())
 
-        g_loss = g_id_loss + g_adv_loss + g_l2_loss
+        # Total Loss
+        g_loss = g_id_loss + g_adv_loss + g_pixel_loss + g_perceptual_loss
         self.g_loss_meter.update(g_loss.item())
 
         self.optimizer_g.zero_grad()
@@ -385,7 +449,12 @@ def run():
     args = parse_args()
 
     model_name = '{}_{}_{}_{}_{}'.format(
-        args.basenet, args.margin, args.delta_1, args.delta_2, args.feat_dim
+        args.basenet,
+        args.margin,
+        args.adversarial_coeff,
+        args.pixel_coeff,
+        args.perceptual_coeff,
+        args.feat_dim
     )
     model_dir = os.path.join(args.model_dir, model_name)
     data_split = os.path.splitext(os.path.basename(args.valid_train_classes_fp))[0]
@@ -417,7 +486,14 @@ def run():
     model = Model(ckpt_dir, args.feat_dim)
 
     for epoch in range(500):
-        model.train_epoch(train_loader, args.delta_1, args.delta_2, args.margin, epoch)
+        model.train_epoch(
+            train_loader=train_loader,
+            adversarial_coeff=args.adversarial_coeff,
+            pixel_coeff=args.pixel_coeff,
+            perceptual_coeff=args.perceptual_coeff,
+            margin=args.margin,
+            epoch=epoch
+        )
         model.eval(test_loader,
                    global_step=epoch * steps_per_epoch + steps_per_epoch)
         state = {
