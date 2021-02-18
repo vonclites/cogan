@@ -1,15 +1,20 @@
 import os
+import torch
 import argparse
 import torchvision
 import numpy as np
 import random as python_random
 import matplotlib.pyplot as plt
 import sklearn.metrics as metrics
+from torchvision import models
+from torch.autograd import Variable
+from torch.nn import functional as func
 from torch.utils.tensorboard import SummaryWriter
 
+import backboned_unet
 from cogan import utils
 from cogan.dataset import get_dataset
-from cogan.model import *
+from cogan.model import Discriminator
 
 GPU0 = torch.device('cuda:0')
 GPU1 = torch.device('cuda:1')
@@ -66,10 +71,14 @@ class Model(object):
         self.writer = SummaryWriter(log_dir=ckpt_dir)
         self.eval_writer = SummaryWriter(log_dir=os.path.join(ckpt_dir, 'eval'))
 
-        self.net_photo = Mapper(prenet='resnet18', outdim=feat_dim)
+        self.net_photo = backboned_unet.Unet(classes=feat_dim)
+        # self.net_photo = UNet()
+        # self.net_photo = Mapper()
         self.net_photo.to(GPU0)
 
-        self.net_print = Mapper(prenet='resnet18', outdim=feat_dim)
+        self.net_print = backboned_unet.Unet(classes=feat_dim)
+        # self.net_print = UNet()
+        # self.net_print = Mapper()
         self.net_print.to(GPU1)
 
         self.disc_photo = Discriminator(in_channels=3)

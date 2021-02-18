@@ -1,13 +1,9 @@
-import math
-
 import torch
-import torch.nn as nn
-import torchvision.models as models
-import torch.nn.functional as F
-from torch.autograd import Variable
-from torch.autograd import Function
+from torch.nn import functional as func
+from torch import nn
+from torchvision import models
 
-# https://github.com/znxlwm/pytorch-pix2pix/blob/master/network.py
+
 class UNet(nn.Module):
     # initializers
     def __init__(self, d=64, feat_dim=128):
@@ -50,33 +46,33 @@ class UNet(nn.Module):
     def forward(self, input):
         bs = input.size(0)
         e1 = self.conv1(input)
-        e2 = self.conv2_bn(self.conv2(F.leaky_relu(e1, 0.2)))
-        e3 = self.conv3_bn(self.conv3(F.leaky_relu(e2, 0.2)))
-        e4 = self.conv4_bn(self.conv4(F.leaky_relu(e3, 0.2)))
-        e5 = self.conv5_bn(self.conv5(F.leaky_relu(e4, 0.2)))
-        e6 = self.conv6_bn(self.conv6(F.leaky_relu(e5, 0.2)))
-        e7 = self.conv7_bn(self.conv7(F.leaky_relu(e6, 0.2)))
-        e8 = self.conv8(F.leaky_relu(e7, 0.2))
+        e2 = self.conv2_bn(self.conv2(func.leaky_relu(e1, 0.2)))
+        e3 = self.conv3_bn(self.conv3(func.leaky_relu(e2, 0.2)))
+        e4 = self.conv4_bn(self.conv4(func.leaky_relu(e3, 0.2)))
+        e5 = self.conv5_bn(self.conv5(func.leaky_relu(e4, 0.2)))
+        e6 = self.conv6_bn(self.conv6(func.leaky_relu(e5, 0.2)))
+        e7 = self.conv7_bn(self.conv7(func.leaky_relu(e6, 0.2)))
+        e8 = self.conv8(func.leaky_relu(e7, 0.2))
         # e8 = self.conv8_bn(self.conv8(F.leaky_relu(e7, 0.2)))
         bottleneck = e8.view(bs, -1)
         bottleneck = self.fc1(bottleneck)
 
-        d1 = F.dropout(self.deconv1_bn(self.deconv1(F.relu(e8))), 0.5, training=True)
+        d1 = func.dropout(self.deconv1_bn(self.deconv1(func.relu(e8))), 0.5, training=True)
         d1 = torch.cat([d1, e7], 1)
-        d2 = F.dropout(self.deconv2_bn(self.deconv2(F.relu(d1))), 0.5, training=True)
+        d2 = func.dropout(self.deconv2_bn(self.deconv2(func.relu(d1))), 0.5, training=True)
         d2 = torch.cat([d2, e6], 1)
-        d3 = F.dropout(self.deconv3_bn(self.deconv3(F.relu(d2))), 0.5, training=True)
+        d3 = func.dropout(self.deconv3_bn(self.deconv3(func.relu(d2))), 0.5, training=True)
         d3 = torch.cat([d3, e5], 1)
-        d4 = self.deconv4_bn(self.deconv4(F.relu(d3)))
+        d4 = self.deconv4_bn(self.deconv4(func.relu(d3)))
         # d4 = F.dropout(self.deconv4_bn(self.deconv4(F.relu(d3))), 0.5)
         d4 = torch.cat([d4, e4], 1)
-        d5 = self.deconv5_bn(self.deconv5(F.relu(d4)))
+        d5 = self.deconv5_bn(self.deconv5(func.relu(d4)))
         d5 = torch.cat([d5, e3], 1)
-        d6 = self.deconv6_bn(self.deconv6(F.relu(d5)))
+        d6 = self.deconv6_bn(self.deconv6(func.relu(d5)))
         d6 = torch.cat([d6, e2], 1)
-        d7 = self.deconv7_bn(self.deconv7(F.relu(d6)))
+        d7 = self.deconv7_bn(self.deconv7(func.relu(d6)))
         d7 = torch.cat([d7, e1], 1)
-        d8 = self.deconv8(F.relu(d7))
+        d8 = self.deconv8(func.relu(d7))
         o = torch.tanh(d8)
 
         return o, bottleneck
@@ -124,12 +120,12 @@ class UNetV2(nn.Module):
     def forward(self, input):
         bs = input.size(0)
         e1 = self.conv1(input)
-        e2 = self.conv2_bn(self.conv2(F.leaky_relu(e1, 0.2)))
-        e3 = self.conv3_bn(self.conv3(F.leaky_relu(e2, 0.2)))
-        e4 = self.conv4_bn(self.conv4(F.leaky_relu(e3, 0.2)))
-        e5 = self.conv5_bn(self.conv5(F.leaky_relu(e4, 0.2)))
-        e6 = self.conv6_bn(self.conv6(F.leaky_relu(e5, 0.2)))
-        e7 = self.conv7_bn(self.conv7(F.leaky_relu(e6, 0.2)))
+        e2 = self.conv2_bn(self.conv2(func.leaky_relu(e1, 0.2)))
+        e3 = self.conv3_bn(self.conv3(func.leaky_relu(e2, 0.2)))
+        e4 = self.conv4_bn(self.conv4(func.leaky_relu(e3, 0.2)))
+        e5 = self.conv5_bn(self.conv5(func.leaky_relu(e4, 0.2)))
+        e6 = self.conv6_bn(self.conv6(func.leaky_relu(e5, 0.2)))
+        e7 = self.conv7_bn(self.conv7(func.leaky_relu(e6, 0.2)))
         # e8 = self.conv8(F.leaky_relu(e7, 0.2))
         # e8 = self.conv8_bn(self.conv8(F.leaky_relu(e7, 0.2)))
         bottleneck = e7.view(bs, -1)
@@ -137,20 +133,20 @@ class UNetV2(nn.Module):
 
         # d1 = F.dropout(self.deconv1_bn(self.deconv1(F.relu(e8))), 0.5, training=True)
         # d1 = torch.cat([d1, e7], 1)
-        d2 = F.dropout(self.deconv2_bn(self.deconv2(F.relu(e7))), 0.5, training=True)
+        d2 = func.dropout(self.deconv2_bn(self.deconv2(func.relu(e7))), 0.5, training=True)
         d2 = torch.cat([d2, e6], 1)
-        d3 = F.dropout(self.deconv3_bn(self.deconv3(F.relu(d2))), 0.5, training=True)
+        d3 = func.dropout(self.deconv3_bn(self.deconv3(func.relu(d2))), 0.5, training=True)
         d3 = torch.cat([d3, e5], 1)
-        d4 = self.deconv4_bn(self.deconv4(F.relu(d3)))
+        d4 = self.deconv4_bn(self.deconv4(func.relu(d3)))
         # d4 = F.dropout(self.deconv4_bn(self.deconv4(F.relu(d3))), 0.5)
         d4 = torch.cat([d4, e4], 1)
-        d5 = self.deconv5_bn(self.deconv5(F.relu(d4)))
+        d5 = self.deconv5_bn(self.deconv5(func.relu(d4)))
         d5 = torch.cat([d5, e3], 1)
-        d6 = self.deconv6_bn(self.deconv6(F.relu(d5)))
+        d6 = self.deconv6_bn(self.deconv6(func.relu(d5)))
         d6 = torch.cat([d6, e2], 1)
-        d7 = self.deconv7_bn(self.deconv7(F.relu(d6)))
+        d7 = self.deconv7_bn(self.deconv7(func.relu(d6)))
         d7 = torch.cat([d7, e1], 1)
-        d8 = self.deconv8(F.relu(d7))
+        d8 = self.deconv8(func.relu(d7))
         o = torch.tanh(d8)
 
         return o, bottleneck
@@ -198,11 +194,11 @@ class UNetV3(nn.Module):
     def forward(self, input):
         bs = input.size(0)
         e1 = self.conv1(input)
-        e2 = self.conv2_bn(self.conv2(F.leaky_relu(e1, 0.2)))
-        e3 = self.conv3_bn(self.conv3(F.leaky_relu(e2, 0.2)))
-        e4 = self.conv4_bn(self.conv4(F.leaky_relu(e3, 0.2)))
-        e5 = self.conv5_bn(self.conv5(F.leaky_relu(e4, 0.2)))
-        e6 = self.conv6_bn(self.conv6(F.leaky_relu(e5, 0.2)))
+        e2 = self.conv2_bn(self.conv2(func.leaky_relu(e1, 0.2)))
+        e3 = self.conv3_bn(self.conv3(func.leaky_relu(e2, 0.2)))
+        e4 = self.conv4_bn(self.conv4(func.leaky_relu(e3, 0.2)))
+        e5 = self.conv5_bn(self.conv5(func.leaky_relu(e4, 0.2)))
+        e6 = self.conv6_bn(self.conv6(func.leaky_relu(e5, 0.2)))
         # e7 = self.conv7_bn(self.conv7(F.leaky_relu(e6, 0.2)))
         # e8 = self.conv8(F.leaky_relu(e7, 0.2))
         # e8 = self.conv8_bn(self.conv8(F.leaky_relu(e7, 0.2)))
@@ -213,18 +209,18 @@ class UNetV3(nn.Module):
         # d1 = torch.cat([d1, e7], 1)
         # d2 = F.dropout(self.deconv2_bn(self.deconv2(F.relu(e7))), 0.5, training=True)
         # d2 = torch.cat([d2, e6], 1)
-        d3 = F.dropout(self.deconv3_bn(self.deconv3(F.relu(e6))), 0.5, training=True)
+        d3 = func.dropout(self.deconv3_bn(self.deconv3(func.relu(e6))), 0.5, training=True)
         d3 = torch.cat([d3, e5], 1)
-        d4 = self.deconv4_bn(self.deconv4(F.relu(d3)))
+        d4 = self.deconv4_bn(self.deconv4(func.relu(d3)))
         # d4 = F.dropout(self.deconv4_bn(self.deconv4(F.relu(d3))), 0.5)
         d4 = torch.cat([d4, e4], 1)
-        d5 = self.deconv5_bn(self.deconv5(F.relu(d4)))
+        d5 = self.deconv5_bn(self.deconv5(func.relu(d4)))
         d5 = torch.cat([d5, e3], 1)
-        d6 = self.deconv6_bn(self.deconv6(F.relu(d5)))
+        d6 = self.deconv6_bn(self.deconv6(func.relu(d5)))
         d6 = torch.cat([d6, e2], 1)
-        d7 = self.deconv7_bn(self.deconv7(F.relu(d6)))
+        d7 = self.deconv7_bn(self.deconv7(func.relu(d6)))
         d7 = torch.cat([d7, e1], 1)
-        d8 = self.deconv8(F.relu(d7))
+        d8 = self.deconv8(func.relu(d7))
         o = torch.tanh(d8)
 
         return o, bottleneck
@@ -272,10 +268,10 @@ class UNetV4(nn.Module):
     def forward(self, input):
         bs = input.size(0)
         e1 = self.conv1(input)
-        e2 = self.conv2_bn(self.conv2(F.leaky_relu(e1, 0.2)))
-        e3 = self.conv3_bn(self.conv3(F.leaky_relu(e2, 0.2)))
-        e4 = self.conv4_bn(self.conv4(F.leaky_relu(e3, 0.2)))
-        e5 = self.conv5_bn(self.conv5(F.leaky_relu(e4, 0.2)))
+        e2 = self.conv2_bn(self.conv2(func.leaky_relu(e1, 0.2)))
+        e3 = self.conv3_bn(self.conv3(func.leaky_relu(e2, 0.2)))
+        e4 = self.conv4_bn(self.conv4(func.leaky_relu(e3, 0.2)))
+        e5 = self.conv5_bn(self.conv5(func.leaky_relu(e4, 0.2)))
         # e6 = self.conv6_bn(self.conv6(F.leaky_relu(e5, 0.2)))
         # e7 = self.conv7_bn(self.conv7(F.leaky_relu(e6, 0.2)))
         # e8 = self.conv8(F.leaky_relu(e7, 0.2))
@@ -289,16 +285,16 @@ class UNetV4(nn.Module):
         # d2 = torch.cat([d2, e6], 1)
         # d3 = F.dropout(self.deconv3_bn(self.deconv3(F.relu(e6))), 0.5, training=True)
         # d3 = torch.cat([d3, e5], 1)
-        d4 = self.deconv4_bn(self.deconv4(F.relu(e5)))
+        d4 = self.deconv4_bn(self.deconv4(func.relu(e5)))
         # d4 = F.dropout(self.deconv4_bn(self.deconv4(F.relu(d3))), 0.5)
         d4 = torch.cat([d4, e4], 1)
-        d5 = self.deconv5_bn(self.deconv5(F.relu(d4)))
+        d5 = self.deconv5_bn(self.deconv5(func.relu(d4)))
         d5 = torch.cat([d5, e3], 1)
-        d6 = self.deconv6_bn(self.deconv6(F.relu(d5)))
+        d6 = self.deconv6_bn(self.deconv6(func.relu(d5)))
         d6 = torch.cat([d6, e2], 1)
-        d7 = self.deconv7_bn(self.deconv7(F.relu(d6)))
+        d7 = self.deconv7_bn(self.deconv7(func.relu(d6)))
         d7 = torch.cat([d7, e1], 1)
-        d8 = self.deconv8(F.relu(d7))
+        d8 = self.deconv8(func.relu(d7))
         o = torch.tanh(d8)
 
         return o, bottleneck
@@ -332,21 +328,21 @@ class UNetV5(nn.Module):
     def forward(self, input):
         bs = input.size(0)
         e1 = self.conv1(input)
-        e2 = self.conv2_bn(self.conv2(F.leaky_relu(e1, 0.2)))
-        e3 = self.conv3_bn(self.conv3(F.leaky_relu(e2, 0.2)))
-        e4 = self.conv4_bn(self.conv4(F.leaky_relu(e3, 0.2)))
+        e2 = self.conv2_bn(self.conv2(func.leaky_relu(e1, 0.2)))
+        e3 = self.conv3_bn(self.conv3(func.leaky_relu(e2, 0.2)))
+        e4 = self.conv4_bn(self.conv4(func.leaky_relu(e3, 0.2)))
 
 
         bottleneck = e4.view(bs, -1)
         bottleneck = self.fc1(bottleneck)
 
-        d5 = self.deconv5_bn(self.deconv5(F.relu(e4)))
+        d5 = self.deconv5_bn(self.deconv5(func.relu(e4)))
         d5 = torch.cat([d5, e3], 1)
-        d6 = self.deconv6_bn(self.deconv6(F.relu(d5)))
+        d6 = self.deconv6_bn(self.deconv6(func.relu(d5)))
         d6 = torch.cat([d6, e2], 1)
-        d7 = self.deconv7_bn(self.deconv7(F.relu(d6)))
+        d7 = self.deconv7_bn(self.deconv7(func.relu(d6)))
         d7 = torch.cat([d7, e1], 1)
-        d8 = self.deconv8(F.relu(d7))
+        d8 = self.deconv8(func.relu(d7))
         o = torch.tanh(d8)
 
         return o, bottleneck
@@ -374,24 +370,24 @@ class UNetV6(nn.Module):
         self.deconv6_bn = nn.BatchNorm2d(d * 2)
         self.deconv7 = nn.ConvTranspose2d(d * 2 * 2, d, 4, 2, 1)
         self.deconv7_bn = nn.BatchNorm2d(d)
-        self.deconv8 = nn.ConvTranspose2d(d * 2, 3, 4, 2, 1)
+        self.deconv8 = nn.ConvTra4nspose2d(d * 2, 3, 4, 2, 1)
 
     # forward method
     def forward(self, input):
         bs = input.size(0)
         e1 = self.conv1(input)
-        e2 = self.conv2_bn(self.conv2(F.leaky_relu(e1, 0.2)))
-        e3 = self.conv3_bn(self.conv3(F.leaky_relu(e2, 0.2)))
+        e2 = self.conv2_bn(self.conv2(func.leaky_relu(e1, 0.2)))
+        e3 = self.conv3_bn(self.conv3(func.leaky_relu(e2, 0.2)))
 
 
         bottleneck = e3.view(bs, -1)
         bottleneck = self.fc1(bottleneck)
 
-        d6 = self.deconv6_bn(self.deconv6(F.relu(e3)))
+        d6 = self.deconv6_bn(self.deconv6(func.relu(e3)))
         d6 = torch.cat([d6, e2], 1)
-        d7 = self.deconv7_bn(self.deconv7(F.relu(d6)))
+        d7 = self.deconv7_bn(self.deconv7(func.relu(d6)))
         d7 = torch.cat([d7, e1], 1)
-        d8 = self.deconv8(F.relu(d7))
+        d8 = self.deconv8(func.relu(d7))
         o = torch.tanh(d8)
 
         return o, bottleneck
