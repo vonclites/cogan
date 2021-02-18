@@ -74,16 +74,14 @@ def get_dataset(batch_size,
         is_valid_file_fn = class_filter(valid_classes)
     else:
         is_valid_file_fn = None
-
+    # Is there a way to do synchronized augmentation?
+    # i.e. RandomRotation(15)/RandomHorizontalFlip()
     vis_dataset = datasets.ImageFolder(
         root=vis_dir,
         transform=transforms.Compose([
-            transforms.Resize(256),
+            transforms.Resize((256, 256)),
             transforms.Pad(16),
             transforms.RandomCrop(256),
-            transforms.RandomRotation(15),
-            # transforms.RandomCrop(256),
-            # transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean=vis_mean, std=vis_std)
         ]),
@@ -93,12 +91,9 @@ def get_dataset(batch_size,
     nir_dataset = datasets.ImageFolder(
         root=nir_dir,
         transform=transforms.Compose([
-            transforms.Resize(256),
+            transforms.Resize((256, 256)),
             transforms.Pad(16),
             transforms.RandomCrop(256),
-            transforms.RandomRotation(15),
-            # transforms.RandomCrop(256),
-            # transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean=nir_mean, std=nir_std)
         ]),
