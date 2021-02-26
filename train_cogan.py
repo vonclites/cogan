@@ -131,6 +131,8 @@ class Model(object):
         self.d_fake_print_loss_meter = utils.AverageMeter()
 
         self.accuracy_meter = utils.AverageMeter()
+        self.auc_meter = utils.AverageMeter()
+        self.eer_meter = utils.AverageMeter()
 
     def _reset_meters(self):
         self.g_loss_meter.reset()
@@ -153,6 +155,8 @@ class Model(object):
         self.d_fake_photo_loss_meter.reset()
         self.d_fake_print_loss_meter.reset()
         self.accuracy_meter.reset()
+        self.auc_meter.reset()
+        self.eer_meter.reset()
 
     def train_epoch(self,
                     train_loader,
@@ -257,6 +261,7 @@ class Model(object):
 
         self.writer.add_scalar('accuracy', self.accuracy_meter.avg, global_step)
         self.writer.flush()
+        self._reset_meters()
 
     def _train_step(self,
                     img_photo,
@@ -433,6 +438,12 @@ class Model(object):
             auc = metrics.auc(fpr, tpr)
             eer = utils.eer(fpr, tpr)
 
+            self.auc_meter.update(auc)
+            self.eer_meter.update(eer)
+
+            self.eval_writer.add_scalar('auc', self.auc_meter.avg, global_step)
+            self.eval_writer.add_scalar('eer', self.eer_meter.avg, global_step)
+
             fig = plt.figure()
             ax: plt.Axes = fig.add_subplot()
             ax.plot(fpr, tpr, 'b', label='AUC = {:.2f} | EER = {:.2f}'.format(auc, eer))
@@ -443,6 +454,8 @@ class Model(object):
             ax.set_ylabel('True Positive Rate')
             ax.set_xlabel('False Positive Rate')
             self.eval_writer.add_figure('ROC Curve', fig, global_step=global_step)
+            self.eval_writer.flush()
+            self._reset_meters()
 
 
 def run():
