@@ -26,6 +26,7 @@ Tensor = torch.cuda.FloatTensor
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch_size', default=128, type=int, help='batch size')
+    parser.add_argument('--num_epochs', default=400, type=int, help='batch size')
     parser.add_argument('--margin', default=100, type=int, help='batch size')
     parser.add_argument('--adversarial_coeff', default=1, type=float,
                         help='Adversarial Loss Coefficient')
@@ -57,8 +58,8 @@ def parse_args():
     parser.add_argument('--vis_std_fp', type=str,
                         default='/home/hulk1/data/periocular/hk/stats/vis_std.txt',
                         help='Path to file containing channel-wise image statistic')
-    parser.add_argument('--basenet', default='resnet18', type=str,
-                        help='e.g., resnet50, resnext50, resnext101'
+    parser.add_argument('--backbone', default='resnet18', type=str,
+                        help='resnet18, resnet34, resnet50,'
                              'and their wider variants, resnet50x4')
     parser.add_argument('-d', '--feat_dim', default=128, type=int,
                         help='feature dimension for contrastive loss')
@@ -66,7 +67,7 @@ def parse_args():
 
 
 class Model(object):
-    def __init__(self, ckpt_dir, feat_dim):
+    def __init__(self, backbone, ckpt_dir, feat_dim):
         self.adversarial_photo_loss = torch.nn.MSELoss().to(GPU0)
         self.adversarial_print_loss = torch.nn.MSELoss().to(GPU1)
         self.pixel_photo_loss = torch.nn.MSELoss().to(GPU0)
@@ -75,12 +76,12 @@ class Model(object):
         self.writer = SummaryWriter(log_dir=ckpt_dir)
         self.eval_writer = SummaryWriter(log_dir=os.path.join(ckpt_dir, 'eval'))
 
-        self.net_photo = backboned_unet.Unet(classes=feat_dim)
+        self.net_photo = backboned_unet.Unet(backbone_name=backbone, classes=feat_dim)
         # self.net_photo = UNet()
         # self.net_photo = Mapper()
         self.net_photo.to(GPU0)
 
-        self.net_print = backboned_unet.Unet(classes=feat_dim)
+        self.net_print = backboned_unet.Unet(backbone_name=backbone, classes=feat_dim)
         # self.net_print = UNet()
         # self.net_print = Mapper()
         self.net_print.to(GPU1)
@@ -133,6 +134,8 @@ class Model(object):
         self.accuracy_meter = utils.AverageMeter()
         self.auc_meter = utils.AverageMeter()
         self.eer_meter = utils.AverageMeter()
+        self.frr_far_01_meter = utils.AverageMeter()
+        self.frr_far_10_meter = utils.AverageMeter()
 
     def _reset_meters(self):
         self.g_loss_meter.reset()
@@ -157,6 +160,8 @@ class Model(object):
         self.accuracy_meter.reset()
         self.auc_meter.reset()
         self.eer_meter.reset()
+        self.frr_far_01_meter.reset()
+        self.frr_far_10_meter.reset()
 
     def train_epoch(self,
                     train_loader,
@@ -437,12 +442,17 @@ class Model(object):
             fpr, tpr, threshold = metrics.roc_curve(lbl, dist)
             auc = metrics.auc(fpr, tpr)
             eer = utils.eer(fpr, tpr)
+            frr = 1 - tpr
 
             self.auc_meter.update(auc)
             self.eer_meter.update(eer)
+            self.frr_far_10_meter.update(frr[np.searchsorted(fpr, .1)])
+            self.frr_far_01_meter.update(frr[np.searchsorted(fpr, .01)])
 
             self.eval_writer.add_scalar('auc', self.auc_meter.avg, global_step)
             self.eval_writer.add_scalar('eer', self.eer_meter.avg, global_step)
+            self.eval_writer.add_scalar('frr@far=10%', self.frr_far_10_meter.avg, global_step)
+            self.eval_writer.add_scalar('frr@far=1%', self.frr_far_01_meter.avg, global_step)
 
             fig = plt.figure()
             ax: plt.Axes = fig.add_subplot()
@@ -458,11 +468,9 @@ class Model(object):
             self._reset_meters()
 
 
-def run():
-    args = parse_args()
-
+def run(args):
     model_name = '{}_{}_{}_{}_{}'.format(
-        args.basenet,
+        args.backbone,
         args.margin,
         args.adversarial_coeff,
         args.pixel_coeff,
@@ -496,7 +504,7 @@ def run():
     )
     steps_per_epoch = len(train_loader)
 
-    model = Model(ckpt_dir, args.feat_dim)
+    model = Model(args.backbone, ckpt_dir, args.feat_dim)
 
     for epoch in range(500):
         model.train_epoch(
@@ -529,5 +537,4 @@ if __name__ == '__main__':
     python_random.seed(62484)
     np.random.seed(62484)
     torch.manual_seed(62484)
-
-    run()
+    run(parse_args())
