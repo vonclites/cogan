@@ -39,6 +39,9 @@ def write_dev_class_list(dev_splits, output_dir):
         filepath = os.path.join(output_dir, 'val{}.txt'.format(split))
         with open(filepath, 'w') as f:
             f.write('\n'.join(validation_classes))
+    filepath = os.path.join(output_dir, 'dev.txt')
+    with open(filepath, 'w') as f:
+        f.write('\n'.join(np.concatenate(dev_splits[0])))
 
 
 def calculate_image_stats(domain_dir):
