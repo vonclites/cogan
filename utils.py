@@ -1,4 +1,6 @@
 import matplotlib.pyplot as plt
+from scipy.optimize import brentq
+from scipy.interpolate import interp1d
 
 
 def norm_minmax(x):
@@ -22,6 +24,7 @@ def plot_tensor(t):
         plt.imshow(ti_np)
     plt.show()
 
+
 class AverageMeter(object):
     """Computes and stores the average and current value"""
 
@@ -39,3 +42,8 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
+
+# noinspection PyTypeChecker
+def eer(fpr, tpr):
+    return brentq(lambda x: 1.0 - x - interp1d(fpr, tpr)(x), 0.0, 1.0)

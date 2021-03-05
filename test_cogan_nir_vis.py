@@ -39,7 +39,7 @@ parser.add_argument('--nir_dir', type=str,
 parser.add_argument('--vis_dir', type=str,
                     default='/home/hulk2/data/periocular/hk/images/dev/VIS',
                     help='path to data')
-parser.add_argument('--valid_classes_filepath', type=str,
+parser.add_argument('--valid_test_classes_filepath', type=str,
                     help='text file of class labels to include in dataset')
 parser.add_argument('--ckpt_dir', type=str,
                     help='path to save the data')
@@ -93,13 +93,22 @@ net_print.to(gpu1)
 net_print.load_state_dict(state['net_print'])
 net_print.eval()
 
-train_loader = get_dataset(args)
+test_loader = get_dataset(
+    batch_size=args.batch_size,
+    vis_dir=args.vis_dir,
+    nir_dir=args.nir_dir,
+    valid_classes_fp=args.valid_test_classes_fp,
+    vis_mean_fp=args.vis_mean_fp,
+    vis_std_fp=args.vis_std_fp,
+    nir_mean_fp=args.nir_mean_fp,
+    nir_std_fp=args.nir_std_fp
+)
 
-print(len(train_loader))
+print(len(test_loader))
 
 dist_l = []
 lbl_l = []
-for step, (img_photo, img_print, lbl) in enumerate(train_loader):
+for step, (img_photo, img_print, lbl) in enumerate(test_loader):
     # plot_tensor([img_photo[0], img_print[0]])
     print(step)
     bs = img_photo.size(0)

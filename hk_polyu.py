@@ -1,15 +1,16 @@
 import os
+import math
 import shutil
 import numpy as np
 import random as python_random
 from skimage.io import imread
-from sklearn.model_selection import KFold, train_test_split
+from sklearn.model_selection import KFold
 
 SESSION1_DIR = '/home/hulk1/data/periocular/hk/PolyU_Cross_Session_1/PolyU_Cross_Iris'
 SESSION2_DIR = '/home/hulk1/data/periocular/hk/PolyU_Cross_Session_2/PolyU_Cross_Iris'
 IMAGE_DIR = '/home/hulk1/data/periocular/hk/images'
 PROTOCOL_DIR = '/home/hulk1/data/periocular/hk/protocols'
-NUM_TEST_SUBJECTS = 40
+NUM_SUBJECTS = 209
 
 
 def create_image_directories(subjects, output_dir):
@@ -29,25 +30,15 @@ def create_image_directories(subjects, output_dir):
                     shutil.copy(source_filepath, target_filepath)
 
 
-def write_dev_subject_list(dev_splits, output_dir):
+def write_dev_class_list(dev_splits, output_dir):
     os.makedirs(output_dir, exist_ok=True)
-    for split, (train_subjects, validation_subjects) in enumerate(dev_splits):
+    for split, (train_classes, validation_classes) in enumerate(dev_splits):
         filepath = os.path.join(output_dir, 'train{}.txt'.format(split))
-        train_subjects = sorted(
-            [subject + eye
-             for subject in train_subjects
-             for eye in ['L', 'R']]
-        )
-        validation_subjects = sorted(
-            [subject + eye
-             for subject in validation_subjects
-             for eye in ['L', 'R']]
-        )
         with open(filepath, 'w') as f:
-            f.write('\n'.join(train_subjects))
+            f.write('\n'.join(train_classes))
         filepath = os.path.join(output_dir, 'val{}.txt'.format(split))
         with open(filepath, 'w') as f:
-            f.write('\n'.join(validation_subjects))
+            f.write('\n'.join(validation_classes))
 
 
 def calculate_image_stats(domain_dir):
@@ -61,21 +52,27 @@ def calculate_image_stats(domain_dir):
     std = np.std(images, axis=(0, 1, 2))
     return mean, std
 
-def run():
+
+def create_open_world_protocol():
     python_random.seed(62484)
     np.random.seed(62484)
 
     session1_subjects = sorted(os.listdir(SESSION1_DIR))
 
-    # Sequester repeat subjects into test set
-    session2_subjects = sorted(os.listdir(SESSION2_DIR))
+    assert len(session1_subjects) == NUM_SUBJECTS
 
-    remaining_subjects = set(session1_subjects).difference(set(session2_subjects))
-    dev_subjects, test_subjects = train_test_split(
-        list(remaining_subjects),
-        test_size=NUM_TEST_SUBJECTS - len(session2_subjects),
-        shuffle=True
-    )
+    dev_subjects = session1_subjects[:math.ceil(NUM_SUBJECTS / 2)]
+    test_subjects = session1_subjects[-math.ceil(NUM_SUBJECTS / 2):]
+
+    dev_subjects = np.array(dev_subjects)
+    kf = KFold(n_splits=5, shuffle=True)
+    dev_splits = [(dev_subjects[train_indices], dev_subjects[val_indices])
+                  for train_indices, val_indices in kf.split(dev_subjects)]
+
+    dev_splits = [(subjects_to_classes(train_split, is_dev=True),
+                   subjects_to_classes(val_split, is_dev=True))
+                  for train_split, val_split in dev_splits]
+    test_classes = subjects_to_classes(test_subjects, is_dev=False)
 
     create_image_directories(
         subjects=dev_subjects,
@@ -85,12 +82,25 @@ def run():
         subjects=test_subjects,
         output_dir=os.path.join(IMAGE_DIR, 'test')
     )
+    write_dev_class_list(dev_splits, PROTOCOL_DIR)
+    filepath = os.path.join(PROTOCOL_DIR, 'test.txt')
+    with open(filepath, 'w') as f:
+        f.write('\n'.join(test_classes))
 
-    dev_subjects = np.array(dev_subjects)
-    kf = KFold(n_splits=5, shuffle=True)
-    dev_splits = [(dev_subjects[train_indices], dev_subjects[val_indices])
-                  for train_indices, val_indices in kf.split(dev_subjects)]
-    write_dev_subject_list(dev_splits, PROTOCOL_DIR)
+
+def run():
+    create_open_world_protocol()
+
+
+def subjects_to_classes(subjects, is_dev):
+    classes = []
+    for subject in subjects:
+        if subject == '105':
+            classes.append(subject + 'L') if is_dev else classes.append(subject + 'R')
+        else:
+            classes.append(subject + 'L')
+            classes.append(subject + 'R')
+    return classes
 
 
 def class_filter(valid_classes_list):

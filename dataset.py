@@ -56,27 +56,32 @@ class ContrastiveDataset(Dataset):
         return min(len(self.nir), len(self.vis))
 
 
-def get_dataset(args):
-    vis_mean = np.loadtxt(args.vis_mean_fp) / 255.0
-    vis_std = np.loadtxt(args.vis_std_fp) / 255.0
-    nir_mean = np.loadtxt(args.nir_mean_fp) / 255.0
-    nir_std = np.loadtxt(args.nir_std_fp) / 255.0
+def get_dataset(batch_size,
+                vis_dir,
+                nir_dir,
+                valid_classes_fp,
+                vis_mean_fp,
+                vis_std_fp,
+                nir_mean_fp,
+                nir_std_fp):
+    vis_mean = np.loadtxt(vis_mean_fp) / 255.0
+    vis_std = np.loadtxt(vis_std_fp) / 255.0
+    nir_mean = np.loadtxt(nir_mean_fp) / 255.0
+    nir_std = np.loadtxt(nir_std_fp) / 255.0
 
-    if args.valid_classes_filepath is not None:
-        valid_classes = np.loadtxt(args.valid_classes_filepath, dtype=str)
+    if valid_classes_fp is not None:
+        valid_classes = np.loadtxt(valid_classes_fp, dtype=str)
         is_valid_file_fn = class_filter(valid_classes)
     else:
         is_valid_file_fn = None
-
+    # Is there a way to do synchronized augmentation?
+    # i.e. RandomRotation(15)/RandomHorizontalFlip()
     vis_dataset = datasets.ImageFolder(
-        root=args.vis_dir,
+        root=vis_dir,
         transform=transforms.Compose([
-            transforms.Resize(256),
+            transforms.Resize((256, 256)),
             transforms.Pad(16),
             transforms.RandomCrop(256),
-            transforms.RandomRotation(15),
-            # transforms.RandomCrop(256),
-            # transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean=vis_mean, std=vis_std)
         ]),
@@ -84,24 +89,21 @@ def get_dataset(args):
     )
 
     nir_dataset = datasets.ImageFolder(
-        root=args.nir_dir,
+        root=nir_dir,
         transform=transforms.Compose([
-            transforms.Resize(256),
+            transforms.Resize((256, 256)),
             transforms.Pad(16),
             transforms.RandomCrop(256),
-            transforms.RandomRotation(15),
-            # transforms.RandomCrop(256),
-            # transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean=nir_mean, std=nir_std)
         ]),
         is_valid_file=is_valid_file_fn
     )
 
-    train_loader = torch.utils.data.DataLoader(
+    data_loader = torch.utils.data.DataLoader(
         ContrastiveDataset(nir_dataset, vis_dataset),
-        batch_size=args.batch_size,
+        batch_size=batch_size,
         shuffle=True,
         pin_memory=True
     )
-    return train_loader
+    return data_loader
