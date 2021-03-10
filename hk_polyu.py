@@ -13,21 +13,23 @@ PROTOCOL_DIR = '/home/hulk1/data/periocular/hk/protocols'
 NUM_SUBJECTS = 209
 
 
-def create_image_directories(subjects, output_dir):
-    for subject in subjects:
+def create_image_directories(classes, output_dir):
+    os.makedirs(output_dir)
+    for class_id in classes:
+        subject = class_id[:-1]
+        eye = class_id[-1]
         subject_dir = os.path.join(SESSION1_DIR, subject)
-        for eye in ['L', 'R']:
-            eye_dir = os.path.join(subject_dir, eye)
-            for domain in ['NIR', 'VIS']:
-                domain_dir = os.path.join(eye_dir, domain)
-                target_dir = os.path.join(output_dir, domain)
-                target_dir = os.path.join(target_dir, subject) + eye
-                os.makedirs(target_dir, exist_ok=True)
-                filenames = os.listdir(domain_dir)
-                for filename in filenames:
-                    source_filepath = os.path.join(domain_dir, filename)
-                    target_filepath = os.path.join(target_dir, filename)
-                    shutil.copy(source_filepath, target_filepath)
+        eye_dir = os.path.join(subject_dir, eye)
+        for domain in ['NIR', 'VIS']:
+            domain_dir = os.path.join(eye_dir, domain)
+            target_dir = os.path.join(output_dir, domain)
+            target_dir = os.path.join(target_dir, subject) + eye
+            os.makedirs(target_dir, exist_ok=True)
+            filenames = os.listdir(domain_dir)
+            for filename in filenames:
+                source_filepath = os.path.join(domain_dir, filename)
+                target_filepath = os.path.join(target_dir, filename)
+                shutil.copy(source_filepath, target_filepath)
 
 
 def write_dev_class_list(dev_splits, output_dir):
@@ -78,15 +80,17 @@ def create_open_world_protocol():
     test_classes = subjects_to_classes(test_subjects, is_dev=False)
 
     create_image_directories(
-        subjects=dev_subjects,
+        classes=dev_splits[0][0] + dev_splits[0][1],
         output_dir=os.path.join(IMAGE_DIR, 'dev')
     )
     create_image_directories(
-        subjects=test_subjects,
+        classes=test_classes,
         output_dir=os.path.join(IMAGE_DIR, 'test')
     )
-    write_dev_class_list(dev_splits, PROTOCOL_DIR)
-    filepath = os.path.join(PROTOCOL_DIR, 'test.txt')
+    protocol_dir = os.path.join(PROTOCOL_DIR, 'open_world')
+    os.makedirs(protocol_dir, exist_ok=True)
+    write_dev_class_list(dev_splits, protocol_dir)
+    filepath = os.path.join(protocol_dir, 'test.txt')
     with open(filepath, 'w') as f:
         f.write('\n'.join(test_classes))
 
