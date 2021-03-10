@@ -1,4 +1,4 @@
-from cogan.dataset import get_dataset
+from cogan.dataset import get_dev_dataset
 import argparse
 # from utils import *
 import torch
@@ -93,7 +93,7 @@ net_print.to(device)
 net_print.load_state_dict(state['net_print'])
 net_print.eval()
 
-train_loader = get_dataset(args)
+train_loader = get_dev_dataset(args)
 
 print(len(train_loader))
 
