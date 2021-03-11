@@ -7,6 +7,7 @@ import numpy as np
 import random as python_random
 import matplotlib.pyplot as plt
 import sklearn.metrics as metrics
+from tqdm import tqdm
 
 import backboned_unet
 from cogan import utils
@@ -86,14 +87,14 @@ def run(args):
         sync_capture=args.sync_capture
     )
 
-    print(len(test_loader))
+    max_steps = len(test_loader)
 
     dist_l = []
     lbl_l = []
     for step, (img_vis, img_nir, lbl) in enumerate(test_loader):
         # plot_tensor([img_photo[0], img_print[0]])
-        print(step)
-        bs = img_vis.size(0)
+        batch_size = img_vis.size(0)
+        print('Step: {} / {}    Batch Size: {}'.format(step, max_steps, batch_size))
         lbl = lbl.type(torch.float)
 
         img_vis = img_vis.to(gpu0)

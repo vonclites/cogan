@@ -74,7 +74,9 @@ class AllVsAllDataset(Dataset):
 
     def __getitem__(self, index):
         vis_idx, nir_idx, label = self.pairs[index]
-        return self.vis[vis_idx], self.nir[nir_idx], label
+        vis_image, _ = self.vis[vis_idx]
+        nir_image, _ = self.nir[nir_idx]
+        return vis_image, nir_image, label
 
     def __len__(self):
         return len(self.pairs)
