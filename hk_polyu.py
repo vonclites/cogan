@@ -1,21 +1,27 @@
 import os
 import math
 import shutil
+import argparse
 import numpy as np
 import random as python_random
 from skimage.io import imread
 from sklearn.model_selection import KFold
 
-SESSION1_DIR = '/home/hulk1/data/periocular/hk/PolyU_Cross_Session_1/PolyU_Cross_Iris'
-SESSION2_DIR = '/home/hulk1/data/periocular/hk/PolyU_Cross_Session_2/PolyU_Cross_Iris'
-IMAGE_DIR = '/home/hulk1/data/periocular/hk/images'
-PROTOCOL_DIR = '/home/hulk1/data/periocular/hk/protocols'
 NUM_SUBJECTS = 209
 
 
-def create_image_directories(subjects, output_dir):
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--session1_dir', type=str,
+                        help='path to data')
+    parser.add_argument('--output_dir', type=str,
+                        help='path to data')
+    return parser.parse_args()
+
+
+def create_image_directories(subjects, input_dir, output_dir):
     for subject in subjects:
-        subject_dir = os.path.join(SESSION1_DIR, subject)
+        subject_dir = os.path.join(input_dir, subject)
         for eye in ['L', 'R']:
             eye_dir = os.path.join(subject_dir, eye)
             for domain in ['NIR', 'VIS']:
@@ -56,13 +62,29 @@ def calculate_image_stats(domain_dir):
     return mean, std
 
 
-def create_open_world_protocol():
+def write_image_stats(nir_mean, nir_std, vis_mean, vis_std, stats_dir):
+    os.makedirs(stats_dir, exist_ok=True)
+    with open('/home/hulk2/data/hk/stats/nir_mean.txt', 'w') as f:
+        np.savetxt(f, [nir_mean])
+    with open('/home/hulk2/data/hk/stats/nir_std.txt', 'w') as f:
+        np.savetxt(f, [nir_std])
+    with open('/home/hulk2/data/hk/stats/vis_mean.txt', 'w') as f:
+        np.savetxt(f, [vis_mean])
+    with open('/home/hulk2/data/hk/stats/vis_std.txt', 'w') as f:
+        np.savetxt(f, [vis_std])
+
+
+def create_open_world_protocol(session1_dir, output_dir,):
     python_random.seed(62484)
     np.random.seed(62484)
 
-    session1_subjects = sorted(os.listdir(SESSION1_DIR))
+    session1_subjects = sorted(os.listdir(session1_dir))
 
     assert len(session1_subjects) == NUM_SUBJECTS
+
+    output_protocol_dir = os.path.join(output_dir, 'protocols')
+    output_image_dir = os.path.join(output_dir, 'images')
+    output_stats_dir = os.path.join(output_dir, 'stats')
 
     dev_subjects = session1_subjects[:math.ceil(NUM_SUBJECTS / 2)]
     test_subjects = session1_subjects[-math.ceil(NUM_SUBJECTS / 2):]
@@ -77,23 +99,32 @@ def create_open_world_protocol():
                   for train_split, val_split in dev_splits]
     test_classes = subjects_to_classes(test_subjects, is_dev=False)
 
+    output_dev_dir = os.path.join(output_image_dir, 'dev')
+    output_test_dir = os.path.join(output_image_dir, 'test')
     create_image_directories(
         subjects=dev_subjects,
-        output_dir=os.path.join(IMAGE_DIR, 'dev')
+        input_dir=session1_dir,
+        output_dir=output_dev_dir
     )
     create_image_directories(
         subjects=test_subjects,
-        output_dir=os.path.join(IMAGE_DIR, 'test')
+        input_dir=session1_dir,
+        output_dir=output_test_dir
     )
-    write_dev_class_list(dev_splits, PROTOCOL_DIR)
-    filepath = os.path.join(PROTOCOL_DIR, 'test.txt')
+    write_dev_class_list(dev_splits, output_protocol_dir)
+    filepath = os.path.join(output_protocol_dir, 'test.txt')
     with open(filepath, 'w') as f:
         f.write('\n'.join(test_classes))
 
-
-def run():
-    create_open_world_protocol()
-
+    nir_mean, nir_std = calculate_image_stats(os.path.join(output_dev_dir, 'NIR'))
+    vis_mean, vis_std = calculate_image_stats(os.path.join(output_dev_dir, 'VIS'))
+    write_image_stats(
+        nir_mean=nir_mean,
+        nir_std=nir_std,
+        vis_mean=vis_mean,
+        vis_std=vis_std,
+        stats_dir=output_stats_dir
+    )
 
 def subjects_to_classes(subjects, is_dev):
     classes = []
@@ -111,6 +142,11 @@ def class_filter(valid_classes_list):
         class_id = os.path.split(os.path.split(filepath)[0])[1]
         return class_id in valid_classes_list
     return is_valid_class
+
+
+def run():
+    args = parse_args()
+    create_open_world_protocol(args.session1_dir, args.output_dir)
 
 
 if __name__ == '__main__':
