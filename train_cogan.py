@@ -61,7 +61,7 @@ def parse_args():
     parser.add_argument('--backbone', default='resnet18', type=str,
                         help='resnet18, resnet34, resnet50,'
                              'and their wider variants, resnet50x4')
-    parser.add_argument('-d', '--feat_dim', default=128, type=int,
+    parser.add_argument('--feat_dim', default=128, type=int,
                         help='feature dimension for contrastive loss')
     return parser.parse_args()
 
@@ -518,6 +518,7 @@ def run(args):
         model.eval(test_loader,
                    global_step=epoch * steps_per_epoch + steps_per_epoch)
         state = {
+            'epoch': epoch,
             'net_photo': model.net_photo.state_dict(),
             'net_print': model.net_print.state_dict(),
             'disc_photo': model.disc_photo.state_dict(),

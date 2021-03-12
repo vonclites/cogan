@@ -62,15 +62,33 @@ def calculate_image_stats(domain_dir):
     return mean, std
 
 
+def subjects_to_classes(subjects, is_dev):
+    classes = []
+    for subject in subjects:
+        if subject == '105':
+            classes.append(subject + 'L') if is_dev else classes.append(subject + 'R')
+        else:
+            classes.append(subject + 'L')
+            classes.append(subject + 'R')
+    return classes
+
+
+def class_filter(valid_classes_list):
+    def is_valid_class(filepath):
+        class_id = os.path.split(os.path.split(filepath)[0])[1]
+        return class_id in valid_classes_list
+    return is_valid_class
+
+
 def write_image_stats(nir_mean, nir_std, vis_mean, vis_std, stats_dir):
     os.makedirs(stats_dir, exist_ok=True)
-    with open('/home/hulk2/data/hk/stats/nir_mean.txt', 'w') as f:
+    with open(os.path.join(stats_dir, 'nir_mean.txt'), 'w') as f:
         np.savetxt(f, [nir_mean])
-    with open('/home/hulk2/data/hk/stats/nir_std.txt', 'w') as f:
+    with open(os.path.join(stats_dir, 'nir_std.txt'), 'w') as f:
         np.savetxt(f, [nir_std])
-    with open('/home/hulk2/data/hk/stats/vis_mean.txt', 'w') as f:
+    with open(os.path.join(stats_dir, 'vis_mean.txt'), 'w') as f:
         np.savetxt(f, [vis_mean])
-    with open('/home/hulk2/data/hk/stats/vis_std.txt', 'w') as f:
+    with open(os.path.join(stats_dir, 'vis_std.txt'), 'w') as f:
         np.savetxt(f, [vis_std])
 
 
@@ -125,23 +143,6 @@ def create_open_world_protocol(session1_dir, output_dir,):
         vis_std=vis_std,
         stats_dir=output_stats_dir
     )
-
-def subjects_to_classes(subjects, is_dev):
-    classes = []
-    for subject in subjects:
-        if subject == '105':
-            classes.append(subject + 'L') if is_dev else classes.append(subject + 'R')
-        else:
-            classes.append(subject + 'L')
-            classes.append(subject + 'R')
-    return classes
-
-
-def class_filter(valid_classes_list):
-    def is_valid_class(filepath):
-        class_id = os.path.split(os.path.split(filepath)[0])[1]
-        return class_id in valid_classes_list
-    return is_valid_class
 
 
 def run():
