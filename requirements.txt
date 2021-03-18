@@ -1,0 +1,6 @@
+torch
+torchvision
+tensorboard
+matplotlib
+scikit-learn
+scikit-image
