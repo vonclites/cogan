@@ -6,7 +6,7 @@ import torchvision.models as models
 import torch.nn.functional as F
 from torchvision.utils import save_image
 
-from cogan.dataset import get_dataset
+from cogan.dataset import get_dev_dataset
 from cogan.utils import *
 from cogan.model import *
 
@@ -112,7 +112,7 @@ net_print.load_state_dict(state['net_print'])
 net_print.eval()
 
 
-train_loader = get_dataset(args)
+train_loader = get_dev_dataset(args)
 
 print(len(train_loader))
 
