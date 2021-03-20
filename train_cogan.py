@@ -502,7 +502,6 @@ def run(args):
 
     model = Model(args.backbone, ckpt_dir, args.feat_dim)
 
-
     for epoch in range(args.num_epochs):
         model.train_epoch(
             train_loader=train_loader,

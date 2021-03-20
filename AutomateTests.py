@@ -30,7 +30,7 @@ for delta1 in delta1_list:
         for margin in margin_list:
             for feature_dim in feature_dims:
                 print("delta_1 %f delta_2 %f margin %d" % (delta1, delta2, margin))
-                os.system("python test_cogan_nir_vis.py --delta_1 %f --delta_2 %f --margin %d --feat_dim %d" % (delta1, delta2, margin, feature_dim))
+                os.system("python test_cogan.py --delta_1 %f --delta_2 %f --margin %d --feat_dim %d" % (delta1, delta2, margin, feature_dim))
 
 # for delta1 in delta1_list:
 #     for delta2 in delta2_list:
