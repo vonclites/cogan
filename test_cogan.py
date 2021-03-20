@@ -125,7 +125,7 @@ def run(args):
         'frr10': frr_10,
         'frr01': frr_01
     }
-    with open(os.path.join(output_dir, 'results.txt', 'w')) as f:
+    with open(os.path.join(output_dir, 'results.txt'), 'w') as f:
         json.dump(results, f, indent=4)
 
     np.save(os.path.join(output_dir, 'pr_ph_lbl_test.npy'), lbl)
