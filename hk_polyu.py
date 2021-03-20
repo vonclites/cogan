@@ -100,7 +100,7 @@ def create_open_world_protocol(session1_dir, output_dir,):
 
     assert len(session1_subjects) == NUM_SUBJECTS
 
-    output_protocol_dir = os.path.join(output_dir, 'protocols')
+    output_protocol_dir = os.path.join(os.path.join(output_dir, 'protocols'), 'ow')
     output_image_dir = os.path.join(output_dir, 'images')
     output_stats_dir = os.path.join(output_dir, 'stats')
 
