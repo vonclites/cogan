@@ -19,8 +19,8 @@ def parse_args():
     parser.add_argument('--batch_size', type=int, help='batch size')
     parser.add_argument('--margin', type=int, help='batch size')
     parser.add_argument('--backbone', type=str,
-                        help='resnet18, resnet34, resnet50,'
-                             'and their wider variants, resnet50x4')
+                        help='resnet18, resnet34, resnet50'
+                        )
     parser.add_argument('--nir_dir', type=str,
                         help='path to data')
     parser.add_argument('--vis_dir', type=str,
@@ -42,10 +42,7 @@ def parse_args():
                         help='Path to file containing channelwise image statistic')
     parser.add_argument('--results_folder', type=str,
                         help='path to save the data')
-    parser.add_argument('--basenet', type=str,
-                        help='e.g., resnet50, resnext50, resnext101'
-                             'and their wider variants, resnet50x4')
-    parser.add_argument('-d', '--feat_dim', type=int,
+    parser.add_argument('--feat_dim', type=int,
                         help='feature dimension for contrastive loss')
     return parser.parse_args()
 
@@ -74,34 +71,6 @@ def run(args):
 
     output_dir = os.path.join(args.ckpt_dir, args.results_folder)
     os.makedirs(output_dir, exist_ok=True)
-parser = argparse.ArgumentParser(description='Contrastive view')
-parser.add_argument('--batch_size', type=int, help='batch size')
-parser.add_argument('--margin', type=int, help='batch size')
-parser.add_argument('--delta_1', type=float, help='Delta 1 HyperParameter')
-parser.add_argument('--delta_2', type=float, help='Delta 2 HyperParameter')
-parser.add_argument('--nir_dir', type=str,
-                    help='path to data')
-parser.add_argument('--vis_dir', type=str,
-                    help='path to data')
-parser.add_argument('--valid_test_classes_fp', type=str,
-                    help='text file of class labels to include in dataset')
-parser.add_argument('--ckpt_dir', type=str,
-                    help='path to save the data')
-parser.add_argument('--nir_mean_fp', type=str,
-                    help='Path to file containing channelwise image statistic')
-parser.add_argument('--nir_std_fp', type=str,
-                    help='Path to file containing channelwise image statistic')
-parser.add_argument('--vis_mean_fp', type=str,
-                    help='Path to file containing channelwise image statistic')
-parser.add_argument('--vis_std_fp', type=str,
-                    help='Path to file containing channelwise image statistic')
-parser.add_argument('--results_folder', type=str,
-                    help='path to save the data')
-parser.add_argument('--backbone', type=str,
-                    help='e.g., resnet50, resnext50, resnext101'
-                         'and their wider variants, resnet50x4')
-parser.add_argument('--feat_dim', type=int,
-                    help='feature dimension for contrastive loss')
 
     test_loader = get_test_dataset(
         batch_size=args.batch_size,
