@@ -488,7 +488,7 @@ def run(args):
     )
     test_loader = None
     if args.valid_test_classes_fp:
-        test_loader = get_dataset(
+        test_loader = get_dev_dataset(
             batch_size=args.batch_size,
             vis_dir=args.vis_dir,
             nir_dir=args.nir_dir,
