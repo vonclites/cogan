@@ -1,6 +1,7 @@
 import os
 import torch
 import argparse
+import itertools
 import torchvision
 import numpy as np
 import random as python_random
@@ -13,7 +14,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 import backboned_unet
 from cogan import utils
-from cogan.dataset import get_dev_dataset
+from cogan.dataset import get_dev_dataset, get_test_dataset
 from cogan.model import Discriminator
 
 GPU0 = torch.device('cuda:0')
@@ -37,8 +38,10 @@ def parse_args():
                         help='Pixel-to-Pixel Loss Coefficient')
     parser.add_argument('--perceptual_coeff', type=float,
                         help='Perceptual Loss Coefficient')
-    parser.add_argument('-d', '--feat_dim',type=int,
+    parser.add_argument('--feat_dim', type=int,
                         help='feature dimension for contrastive loss')
+    parser.add_argument('--positive_prob', type=float,
+                        help='Chance to generate a genuine training pair')
     parser.add_argument('--model_dir', type=str,
                         help='base directory path in which individual runs will be saved')
     parser.add_argument('--nir_dir', type=str,
@@ -70,15 +73,15 @@ class Model(object):
         self.writer = SummaryWriter(log_dir=ckpt_dir)
         self.eval_writer = SummaryWriter(log_dir=os.path.join(ckpt_dir, 'eval'))
 
-        self.net_photo = backboned_unet.Unet(backbone_name=backbone, classes=feat_dim)
+        self.net_vis = backboned_unet.Unet(backbone_name=backbone, classes=feat_dim)
         # self.net_photo = UNet()
         # self.net_photo = Mapper()
-        self.net_photo.to(GPU0)
+        self.net_vis.to(GPU0)
 
-        self.net_print = backboned_unet.Unet(backbone_name=backbone, classes=feat_dim)
+        self.net_nir = backboned_unet.Unet(backbone_name=backbone, classes=feat_dim)
         # self.net_print = UNet()
         # self.net_print = Mapper()
-        self.net_print.to(GPU1)
+        self.net_nir.to(GPU1)
 
         self.disc_photo = Discriminator(in_channels=3)
         self.disc_photo.to(GPU0)
@@ -94,7 +97,7 @@ class Model(object):
         self.perceptual_print_loss = torch.nn.MSELoss().to(GPU1)
 
         self.optimizer_g = torch.optim.Adam(
-            params=list(self.net_photo.parameters()) + list(self.net_print.parameters()),
+            params=list(self.net_vis.parameters()) + list(self.net_nir.parameters()),
             lr=1e-4,
             weight_decay=1e-4
         )
@@ -164,8 +167,8 @@ class Model(object):
                     perceptual_coeff,
                     margin,
                     epoch):
-        self.net_photo.train()
-        self.net_print.train()
+        self.net_vis.train()
+        self.net_nir.train()
         self.disc_photo.train()
         self.disc_print.train()
 
@@ -280,8 +283,8 @@ class Model(object):
         # valid = np.random.uniform(0.9, 1.0, size=(bs, 1))
         fake = Variable(Tensor(bs, 1).fill_(0.0), requires_grad=False)
 
-        fake_photo, y_photo = self.net_photo(img_photo)
-        fake_print, y_print = self.net_print(img_print)
+        fake_photo, y_photo = self.net_vis(img_photo)
+        fake_print, y_print = self.net_nir(img_print)
 
         pred_fake_photo = self.disc_photo(fake_photo)
         pred_fake_print = self.disc_print(fake_print)
@@ -397,43 +400,69 @@ class Model(object):
         self.optimizer_d.step()
         return fake_photo, fake_print
 
-    def eval(self, test_loader, global_step):
-        self.net_photo.eval()
-        self.net_print.eval()
+    def eval(self, vis_loader, nir_loader, global_step):
+        self.net_vis.eval()
+        self.net_nir.eval()
         self.disc_photo.eval()
         self.disc_print.eval()
 
         with torch.no_grad():
-            dist_l = []
-            lbl_l = []
-            for img_photo, img_print, lbl in test_loader:
-                bs = img_photo.size(0)
-                lbl = lbl.type(torch.float)
-                lbl = lbl.to(CPU)
-                img_photo = img_photo.to(GPU0)
-                img_print = img_print.to(GPU1)
+            vis_labels = []
+            vis_features = []
+            nir_labels = []
+            nir_features = []
 
-                valid = Variable(Tensor(bs, 1).fill_(1.0), requires_grad=False)
-                fake = Variable(Tensor(bs, 1).fill_(0.0), requires_grad=False)
+            for images, labels in vis_loader:
+                labels = labels.type(torch.float)
+                labels = labels.to(CPU)
+                images = images.to(GPU0)
 
-                fake_photo, y_photo = self.net_photo(img_photo)
-                fake_print, y_print = self.net_print(img_print)
+                _, features = self.net_vis(images)
+                features = features.to(CPU)
+                vis_features.append(features)
+                vis_labels.append(labels)
 
-                pred_fake_photo = self.disc_photo(fake_photo)
-                pred_fake_print = self.disc_print(fake_print)
+            for images, labels in nir_loader:
+                labels = labels.type(torch.float)
+                labels = labels.to(CPU)
+                images = images.to(GPU1)
 
-                y_photo = y_photo.to(CPU)
-                y_print = y_print.to(CPU)
-                dist = ((y_photo - y_print) ** 2).sum(1)
-                dist_l.append(dist.data)
-                lbl_l.append((1 - lbl).data)
+                _, features = self.net_nir(images)
+                features = features.to(CPU)
+                nir_features.append(features)
+                nir_labels.append(labels)
 
-            dist = torch.cat(dist_l, 0)
-            lbl = torch.cat(lbl_l, 0)
-            dist = dist.cpu().detach().numpy()
-            lbl = lbl.cpu().detach().numpy()
+            vis_features = torch.cat(vis_features, 0)
+            vis_labels = torch.cat(vis_labels, 0)
+            nir_features = torch.cat(nir_features, 0)
+            nir_labels = torch.cat(nir_labels, 0)
 
-            fpr, tpr, threshold = metrics.roc_curve(lbl, dist)
+            classes = set(vis_labels.numpy())
+            pairs = []
+            for class_id in classes:
+                vis_labels_idx = [i
+                                  for i, sample in enumerate(vis_labels)
+                                  if sample == class_id]
+                nir_labels_idx = [i
+                                  for i, sample in enumerate(nir_labels)
+                                  if sample == class_id]
+                combinations = itertools.combinations(range(len(vis_labels_idx)), r=2)
+                pairs += [(vis_labels_idx[vis_idx], nir_labels_idx[nir_idx], 1)
+                          for vis_idx, nir_idx in combinations]
+                vis_labels_idx = [i
+                                  for i, sample in enumerate(vis_labels)
+                                  if sample != class_id]
+                pairs += [(vis_idx, nir_idx, 0)
+                          for nir_idx in nir_labels_idx
+                          for vis_idx in vis_labels_idx]
+
+            pairs = np.array(pairs)
+            vis_features = vis_features[pairs[:, 0]]
+            nir_features = nir_features[pairs[:, 1]]
+            dist = ((vis_features - nir_features) ** 2).sum(1)
+            labels = 1 - pairs[:, 2]
+
+            fpr, tpr, threshold = metrics.roc_curve(labels, dist)
             auc = metrics.auc(fpr, tpr)
             eer = utils.eer(fpr, tpr)
             frr = 1 - tpr
@@ -484,11 +513,13 @@ def run(args):
         vis_mean_fp=args.vis_mean_fp,
         vis_std_fp=args.vis_std_fp,
         nir_mean_fp=args.nir_mean_fp,
-        nir_std_fp=args.nir_std_fp
+        nir_std_fp=args.nir_std_fp,
+        positive_prob=args.positive_prob
     )
-    test_loader = None
+    vis_test_loader = None
+    nir_test_loader = None
     if args.valid_test_classes_fp:
-        test_loader = get_dev_dataset(
+        vis_test_loader, nir_test_loader = get_test_dataset(
             batch_size=args.batch_size,
             vis_dir=args.vis_dir,
             nir_dir=args.nir_dir,
@@ -511,13 +542,14 @@ def run(args):
             margin=args.margin,
             epoch=epoch
         )
-        if test_loader:
-            model.eval(test_loader,
+        if args.valid_test_classes_fp and epoch != 0:
+            model.eval(vis_test_loader,
+                       nir_test_loader,
                        global_step=epoch * steps_per_epoch + steps_per_epoch)
         state = {
             'epoch': epoch,
-            'net_photo': model.net_photo.state_dict(),
-            'net_print': model.net_print.state_dict(),
+            'net_photo': model.net_vis.state_dict(),
+            'net_print': model.net_nir.state_dict(),
             'disc_photo': model.disc_photo.state_dict(),
             'disc_print': model.disc_print.state_dict(),
             'optimizer': model.optimizer_g.state_dict()
