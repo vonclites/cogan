@@ -7,13 +7,13 @@ import random as python_random
 from skimage.io import imread, imsave
 from sklearn.model_selection import KFold
 
-INPUT_IMAGE_DIR = pathlib.Path('/home/hulk1/data/periocular/CrossEyed_DB/PeriCrossEyed')
-OUTPUT_IMAGE_DIR = pathlib.Path('/home/hulk1/data/periocular/CrossEyed_DB/images')
+INPUT_IMAGE_DIR = pathlib.Path('/home/hulk1/data/periocular/ce/PeriCrossEyed')
+OUTPUT_IMAGE_DIR = pathlib.Path('/home/hulk1/data/periocular/ce/images')
 
 NIR_FOLDER = 'NIR'
 VIS_FOLDER = 'VW'
 
-PROTOCOL_DIR = '/home/hulk1/data/periocular/CrossEyed_DB/protocols'
+PROTOCOL_DIR = '/home/hulk1/data/periocular/ce/protocols'
 
 
 def create_open_world_protocol():
@@ -31,17 +31,19 @@ def create_open_world_protocol():
     dev_splits = [([subject + eye for subject in train_subjects for eye in ['L', 'R']],
                    [subject + eye for subject in val_subjects for eye in ['L', 'R']])
                   for train_subjects, val_subjects in dev_splits]
+    test_classes = [subject + eye for subject in test_subjects for eye in ['L', 'R']]
 
-    os.makedirs(PROTOCOL_DIR, exist_ok=True)
+    protocol_dir = os.path.join(PROTOCOL_DIR, 'ow')
+    os.makedirs(protocol_dir, exist_ok=True)
     for i, (train_subjects, val_subjects) in enumerate(dev_splits):
-        with open(os.path.join(PROTOCOL_DIR, 'train{}.txt'.format(i)), 'w') as f:
+        with open(os.path.join(protocol_dir, 'train{}.txt'.format(i)), 'w') as f:
             f.write('\n'.join(train_subjects))
-        with open(os.path.join(PROTOCOL_DIR, 'val{}.txt'.format(i)), 'w') as f:
+        with open(os.path.join(protocol_dir, 'val{}.txt'.format(i)), 'w') as f:
             f.write('\n'.join(val_subjects))
-    with open(os.path.join(PROTOCOL_DIR, 'dev.txt'), 'w') as f:
+    with open(os.path.join(protocol_dir, 'dev.txt'), 'w') as f:
         f.write('\n'.join(np.concatenate(dev_splits[0])))
-    with open(os.path.join(PROTOCOL_DIR, 'test.txt'), 'w') as f:
-        f.write('\n'.join(test_subjects))
+    with open(os.path.join(protocol_dir, 'test.txt'), 'w') as f:
+        f.write('\n'.join(test_classes))
 
     os.makedirs(os.path.join(OUTPUT_IMAGE_DIR, 'dev'), exist_ok=True)
     os.makedirs(os.path.join(OUTPUT_IMAGE_DIR, 'test'), exist_ok=True)

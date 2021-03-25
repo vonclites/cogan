@@ -41,7 +41,7 @@ def parse_args():
     parser.add_argument('--backbone', default='resnet18', type=str,
                         help='resnet18, resnet34, resnet50,'
                              'and their wider variants, resnet50x4')
-    parser.add_argument('-d', '--feat_dim', default=128, type=int,
+    parser.add_argument('--feat_dim', default=128, type=int,
                         help='feature dimension for contrastive loss')
     return parser.parse_args()
 

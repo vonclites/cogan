@@ -486,16 +486,18 @@ def run(args):
         nir_mean_fp=args.nir_mean_fp,
         nir_std_fp=args.nir_std_fp
     )
-    test_loader = get_dev_dataset(
-        batch_size=args.batch_size,
-        vis_dir=args.vis_dir,
-        nir_dir=args.nir_dir,
-        valid_classes_fp=args.valid_test_classes_fp,
-        vis_mean_fp=args.vis_mean_fp,
-        vis_std_fp=args.vis_std_fp,
-        nir_mean_fp=args.nir_mean_fp,
-        nir_std_fp=args.nir_std_fp
-    )
+    test_loader = None
+    if args.valid_test_classes_fp:
+        test_loader = get_dev_dataset(
+            batch_size=args.batch_size,
+            vis_dir=args.vis_dir,
+            nir_dir=args.nir_dir,
+            valid_classes_fp=args.valid_test_classes_fp,
+            vis_mean_fp=args.vis_mean_fp,
+            vis_std_fp=args.vis_std_fp,
+            nir_mean_fp=args.nir_mean_fp,
+            nir_std_fp=args.nir_std_fp
+        )
     steps_per_epoch = len(train_loader)
 
     model = Model(args.backbone, ckpt_dir, args.feat_dim)
@@ -509,9 +511,11 @@ def run(args):
             margin=args.margin,
             epoch=epoch
         )
-        model.eval(test_loader,
-                   global_step=epoch * steps_per_epoch + steps_per_epoch)
+        if test_loader:
+            model.eval(test_loader,
+                       global_step=epoch * steps_per_epoch + steps_per_epoch)
         state = {
+            'epoch': epoch,
             'net_photo': model.net_photo.state_dict(),
             'net_print': model.net_print.state_dict(),
             'disc_photo': model.disc_photo.state_dict(),
