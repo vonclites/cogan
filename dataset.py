@@ -89,7 +89,8 @@ def get_dev_dataset(batch_size,
                     vis_mean_fp,
                     vis_std_fp,
                     nir_mean_fp,
-                    nir_std_fp):
+                    nir_std_fp,
+                    positive_prob):
     vis_mean = np.loadtxt(vis_mean_fp) / 255.0
     vis_std = np.loadtxt(vis_std_fp) / 255.0
     nir_mean = np.loadtxt(nir_mean_fp) / 255.0
@@ -127,7 +128,7 @@ def get_dev_dataset(batch_size,
     )
 
     data_loader = torch.utils.data.DataLoader(
-        ContrastiveDataset(nir_dataset, vis_dataset),
+        ContrastiveDataset(nir_dataset, vis_dataset, positive_prob),
         batch_size=batch_size,
         shuffle=True,
         pin_memory=True
@@ -142,8 +143,7 @@ def get_test_dataset(batch_size,
                      vis_mean_fp,
                      vis_std_fp,
                      nir_mean_fp,
-                     nir_std_fp,
-                     sync_capture):
+                     nir_std_fp):
     vis_mean = np.loadtxt(vis_mean_fp) / 255.0
     vis_std = np.loadtxt(vis_std_fp) / 255.0
     nir_mean = np.loadtxt(nir_mean_fp) / 255.0
@@ -172,13 +172,19 @@ def get_test_dataset(batch_size,
         is_valid_file=is_valid_file_fn
     )
 
-    data_loader = torch.utils.data.DataLoader(
-        AllVsAllDataset(nir_dataset, vis_dataset, sync_capture),
+    vis_loader = torch.utils.data.DataLoader(
+        vis_dataset,
         batch_size=batch_size,
         shuffle=False,
         pin_memory=True
     )
-    return data_loader
+    nir_loader = torch.utils.data.DataLoader(
+        nir_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        pin_memory=True
+    )
+    return vis_loader, nir_loader
 
 
 def _sync_capture_pairs(vis_dataset, nir_dataset):
