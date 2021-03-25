@@ -166,6 +166,7 @@ class Model(object):
                     pixel_coeff,
                     perceptual_coeff,
                     margin,
+                    dist_measure,
                     epoch):
         self.net_vis.train()
         self.net_nir.train()
@@ -185,7 +186,9 @@ class Model(object):
                 adversarial_coeff=adversarial_coeff,
                 pixel_coeff=pixel_coeff,
                 perceptual_coeff=perceptual_coeff,
-                margin=margin)
+                margin=margin,
+                dist_measure=dist_measure
+            )
             if step % 10 == 0:
                 print(
                     'Epoch: %02d, iter: %02d/%02d, D loss: %.4f, G loss: %.4f, acc: %.4f'
@@ -272,7 +275,8 @@ class Model(object):
                     adversarial_coeff,
                     pixel_coeff,
                     perceptual_coeff,
-                    margin):
+                    margin,
+                    dist_measure):
         bs = img_photo.size(0)
         lbl = lbl.type(torch.float)
         lbl = lbl.to(CPU)
@@ -283,8 +287,8 @@ class Model(object):
         # valid = np.random.uniform(0.9, 1.0, size=(bs, 1))
         fake = Variable(Tensor(bs, 1).fill_(0.0), requires_grad=False)
 
-        fake_photo, y_photo = self.net_vis(img_photo)
-        fake_print, y_print = self.net_nir(img_print)
+        fake_photo, y_vis = self.net_vis(img_photo)
+        fake_print, y_nir = self.net_nir(img_print)
 
         pred_fake_photo = self.disc_photo(fake_photo)
         pred_fake_print = self.disc_print(fake_print)
@@ -348,8 +352,16 @@ class Model(object):
         g_perceptual_loss = g_perceptual_loss_raw * perceptual_coeff
         self.g_perceptual_loss_meter.update(g_perceptual_loss.item())
 
+        dist = None
         # Identity Loss
-        dist = ((y_photo.to(CPU) - y_print.to(CPU)) ** 2).sum(1)
+        if dist_measure == 'l2':
+            dist = ((y_vis.to(CPU) - y_nir.to(CPU)) ** 2).sum(1)
+        elif dist_measure == 'cos':
+            cos = torch.nn.CosineSimilarity(dim=1)
+            cos(y_vis.to(CPU), y_nir.to(CPU))
+        else:
+            raise ValueError('dist_measure must be either "l2" or "cos".')
+
         margin = torch.ones_like(dist, device=CPU) * margin
 
         g_id_loss = (lbl * dist + (1 - lbl) * func.relu(margin - dist)).mean()
@@ -400,7 +412,7 @@ class Model(object):
         self.optimizer_d.step()
         return fake_photo, fake_print
 
-    def eval(self, vis_loader, nir_loader, global_step):
+    def eval(self, vis_loader, nir_loader, dist_measure, global_step):
         self.net_vis.eval()
         self.net_nir.eval()
         self.disc_photo.eval()
@@ -459,7 +471,17 @@ class Model(object):
             pairs = np.array(pairs)
             vis_features = vis_features[pairs[:, 0]]
             nir_features = nir_features[pairs[:, 1]]
-            dist = ((vis_features - nir_features) ** 2).sum(1)
+
+            dist = None
+            # Identity Loss
+            if dist_measure == 'l2':
+                dist = ((vis_features - nir_features) ** 2).sum(1)
+            elif dist_measure == 'cos':
+                cos = torch.nn.CosineSimilarity(dim=1)
+                cos(vis_features, nir_features)
+            else:
+                raise ValueError('dist_measure must be either "l2" or "cos".')
+
             labels = 1 - pairs[:, 2]
 
             fpr, tpr, threshold = metrics.roc_curve(labels, dist)
@@ -540,12 +562,16 @@ def run(args):
             pixel_coeff=args.pixel_coeff,
             perceptual_coeff=args.perceptual_coeff,
             margin=args.margin,
+            dist_measure=args.dist_measure,
             epoch=epoch
         )
         if args.valid_test_classes_fp and epoch != 0:
-            model.eval(vis_test_loader,
-                       nir_test_loader,
-                       global_step=epoch * steps_per_epoch + steps_per_epoch)
+            model.eval(
+                vis_loader=vis_test_loader,
+                nir_loader=nir_test_loader,
+                dist_measure=args.dist_measure,
+                global_step=epoch * steps_per_epoch + steps_per_epoch
+            )
         state = {
             'epoch': epoch,
             'net_photo': model.net_vis.state_dict(),
