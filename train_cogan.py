@@ -568,6 +568,7 @@ def run(args):
     for epoch in range(args.num_epochs):
         model.train_epoch(
             train_loader=train_loader,
+            identity_coeff=args.identity_coeff,
             adversarial_coeff=args.adversarial_coeff,
             pixel_coeff=args.pixel_coeff,
             perceptual_coeff=args.perceptual_coeff,
