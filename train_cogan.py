@@ -354,13 +354,13 @@ class Model(object):
         g_perceptual_loss = g_perceptual_loss_raw * perceptual_coeff
         self.g_perceptual_loss_meter.update(g_perceptual_loss.item())
 
-        dist = None
+        # dist = None
         # Identity Loss
         if dist_measure == 'l2':
             dist = ((y_vis.to(CPU) - y_nir.to(CPU)) ** 2).sum(1)
         elif dist_measure == 'cos':
             cos = torch.nn.CosineSimilarity(dim=1)
-            cos(y_vis.to(CPU), y_nir.to(CPU))
+            dist = cos(y_vis.to(CPU), y_nir.to(CPU))
         else:
             raise ValueError('dist_measure must be either "l2" or "cos".')
 
