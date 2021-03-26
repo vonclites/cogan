@@ -32,6 +32,8 @@ def parse_args():
     parser.add_argument('--backbone', type=str,
                         help='resnet18, resnet34, resnet50,'
                              'and their wider variants, resnet50x4')
+    parser.add_argument('--identity_coeff', type=float,
+                        help='Identity Loss Coefficient')
     parser.add_argument('--adversarial_coeff', type=float,
                         help='Adversarial Loss Coefficient')
     parser.add_argument('--pixel_coeff', type=float,
@@ -110,6 +112,7 @@ class Model(object):
         )
 
         self.g_loss_meter = utils.AverageMeter()
+        self.g_id_loss_raw_meter = utils.AverageMeter()
         self.g_id_loss_meter = utils.AverageMeter()
         self.g_adv_photo_loss_meter = utils.AverageMeter()
         self.g_adv_print_loss_meter = utils.AverageMeter()
@@ -138,6 +141,7 @@ class Model(object):
 
     def _reset_meters(self):
         self.g_loss_meter.reset()
+        self.g_id_loss_raw_meter.reset()
         self.g_id_loss_meter.reset()
         self.g_adv_photo_loss_meter.reset()
         self.g_adv_print_loss_meter.reset()
@@ -164,6 +168,7 @@ class Model(object):
 
     def train_epoch(self,
                     train_loader,
+                    identity_coeff,
                     adversarial_coeff,
                     pixel_coeff,
                     perceptual_coeff,
@@ -185,6 +190,7 @@ class Model(object):
                 img_photo=img_photo,
                 img_print=img_print,
                 lbl=lbl,
+                identity_coeff=identity_coeff,
                 adversarial_coeff=adversarial_coeff,
                 pixel_coeff=pixel_coeff,
                 perceptual_coeff=perceptual_coeff,
@@ -274,6 +280,7 @@ class Model(object):
                     img_photo,
                     img_print,
                     lbl,
+                    identity_coeff,
                     adversarial_coeff,
                     pixel_coeff,
                     perceptual_coeff,
@@ -366,7 +373,9 @@ class Model(object):
 
         margin = torch.ones_like(dist, device=CPU) * margin
 
-        g_id_loss = (lbl * dist + (1 - lbl) * func.relu(margin - dist)).mean()
+        g_id_loss_raw = (lbl * dist + (1 - lbl) * func.relu(margin - dist)).mean()
+        self.g_id_loss_raw_meter.update(g_id_loss_raw.item())
+        g_id_loss = g_id_loss_raw * identity_coeff
         self.g_id_loss_meter.update(g_id_loss.item())
 
         # Total Loss
@@ -474,13 +483,12 @@ class Model(object):
             vis_features = vis_features[pairs[:, 0]]
             nir_features = nir_features[pairs[:, 1]]
 
-            dist = None
             # Identity Loss
             if dist_measure == 'l2':
                 dist = ((vis_features - nir_features) ** 2).sum(1)
             elif dist_measure == 'cos':
                 cos = torch.nn.CosineSimilarity(dim=1)
-                cos(vis_features, nir_features)
+                dist = cos(vis_features, nir_features)
             else:
                 raise ValueError('dist_measure must be either "l2" or "cos".')
 
