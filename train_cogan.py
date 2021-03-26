@@ -40,6 +40,8 @@ def parse_args():
                         help='Perceptual Loss Coefficient')
     parser.add_argument('--feat_dim', type=int,
                         help='feature dimension for contrastive loss')
+    parser.add_argument('--dist_measure', type=str,
+                        help='Either "cos" or "l2"')
     parser.add_argument('--positive_prob', type=float,
                         help='Chance to generate a genuine training pair')
     parser.add_argument('--model_dir', type=str,
