@@ -524,9 +524,10 @@ class Model(object):
 
 
 def run(args):
-    model_name = '{}_{}_{}_{}_{}'.format(
+    model_name = '{}_m{}_id{}_ad{}_pi{}_pe{}_f{}'.format(
         args.backbone,
         args.margin,
+        args.identity_coeff,
         args.adversarial_coeff,
         args.pixel_coeff,
         args.perceptual_coeff,
