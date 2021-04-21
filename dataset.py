@@ -5,7 +5,7 @@ import numpy as np
 from torch.utils.data import Dataset
 from torchvision import datasets, transforms
 
-from cogan.hk_polyu import class_filter
+from cogan.datasets.hk_polyu import class_filter
 
 
 class ContrastiveDataset(Dataset):

@@ -8,7 +8,6 @@ import random as python_random
 import matplotlib.pyplot as plt
 import sklearn.metrics as metrics
 from torchvision import models
-from torch.autograd import Variable
 from torch.nn import functional as func
 from torch.utils.tensorboard import SummaryWriter
 
@@ -16,18 +15,13 @@ import backboned_unet
 from cogan import utils
 from cogan.dataset import get_dev_dataset, get_test_dataset
 from cogan.model import Discriminator
-
-GPU0 = torch.device('cuda:0')
-GPU1 = torch.device('cuda:1')
-CPU = torch.device('cpu')
-
-Tensor = torch.cuda.FloatTensor
+from cogan.ddp.ddp_functions import ddp_setup, add_ddp_args
 
 
-def parse_args():
+def create_argparser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch_size', type=int, help='batch size')
-    parser.add_argument('--num_epochs', type=int, help='batch size')
+    parser.add_argument('--num_epochs', type=int, help='number of epochs to train')
     parser.add_argument('--margin', type=int, help='batch size')
     parser.add_argument('--backbone', type=str,
                         help='resnet18, resnet34, resnet50,'
@@ -64,41 +58,38 @@ def parse_args():
                         help='Path to file containing channel-wise image statistic')
     parser.add_argument('--vis_std_fp', type=str,
                         help='Path to file containing channel-wise image statistic')
-    return parser.parse_args()
+    parser.add_argument('--fixed_seed', type=int, default=62484)
+    return parser
+
+
+def set_seeds(fixed_seed):
+    python_random.seed(fixed_seed)
+    np.random.seed(fixed_seed)
+    torch.manual_seed(fixed_seed)
 
 
 class Model(object):
     def __init__(self, backbone, ckpt_dir, feat_dim):
-        self.adversarial_photo_loss = torch.nn.MSELoss().to(GPU0)
-        self.adversarial_print_loss = torch.nn.MSELoss().to(GPU1)
-        self.pixel_photo_loss = torch.nn.MSELoss().to(GPU0)
-        self.pixel_print_loss = torch.nn.MSELoss().to(GPU1)
+        self.adversarial_photo_loss = torch.nn.MSELoss()
+        self.adversarial_print_loss = torch.nn.MSELoss()
+        self.pixel_photo_loss = torch.nn.MSELoss()
+        self.pixel_print_loss = torch.nn.MSELoss()
 
         self.writer = SummaryWriter(log_dir=ckpt_dir)
         self.eval_writer = SummaryWriter(log_dir=os.path.join(ckpt_dir, 'eval'))
 
         self.net_vis = backboned_unet.Unet(backbone_name=backbone, classes=feat_dim)
-        # self.net_photo = UNet()
-        # self.net_photo = Mapper()
-        self.net_vis.to(GPU0)
-
         self.net_nir = backboned_unet.Unet(backbone_name=backbone, classes=feat_dim)
-        # self.net_print = UNet()
-        # self.net_print = Mapper()
-        self.net_nir.to(GPU1)
 
         self.disc_photo = Discriminator(in_channels=3)
-        self.disc_photo.to(GPU0)
-
         self.disc_print = Discriminator(in_channels=3)
-        self.disc_print.to(GPU1)
 
-        self.perceptual_net_photo = models.vgg16(pretrained=True).features.to(GPU0)
-        self.perceptual_net_print = models.vgg16(pretrained=True).features.to(GPU1)
+        self.perceptual_net_photo = models.vgg16(pretrained=True).features
+        self.perceptual_net_print = models.vgg16(pretrained=True).features
         self.perceptual_net_photo = self.perceptual_net_photo.eval()
         self.perceptual_net_print = self.perceptual_net_print.eval()
-        self.perceptual_photo_loss = torch.nn.MSELoss().to(GPU0)
-        self.perceptual_print_loss = torch.nn.MSELoss().to(GPU1)
+        self.perceptual_photo_loss = torch.nn.MSELoss()
+        self.perceptual_print_loss = torch.nn.MSELoss()
 
         self.optimizer_g = torch.optim.Adam(
             params=list(self.net_vis.parameters()) + list(self.net_nir.parameters()),
@@ -288,13 +279,10 @@ class Model(object):
                     dist_measure):
         bs = img_photo.size(0)
         lbl = lbl.type(torch.float)
-        lbl = lbl.to(CPU)
-        img_photo = img_photo.to(GPU0)
-        img_print = img_print.to(GPU1)
 
-        valid = Variable(Tensor(bs, 1).fill_(1.0), requires_grad=False)
+        valid = torch.ones(bs, requires_grad=False)
         # valid = np.random.uniform(0.9, 1.0, size=(bs, 1))
-        fake = Variable(Tensor(bs, 1).fill_(0.0), requires_grad=False)
+        fake = torch.zeros(bs, requires_grad=False)
 
         fake_photo, y_vis = self.net_vis(img_photo)
         fake_print, y_nir = self.net_nir(img_print)
@@ -313,10 +301,8 @@ class Model(object):
         # """"""""""""""""""
 
         # Adversarial Loss
-        g_adv_photo_loss = self.adversarial_photo_loss(pred_fake_photo,
-                                                       valid.to(GPU0)).to(CPU)
-        g_adv_print_loss = self.adversarial_print_loss(pred_fake_print,
-                                                       valid.to(GPU1)).to(CPU)
+        g_adv_photo_loss = self.adversarial_photo_loss(pred_fake_photo, valid)
+        g_adv_print_loss = self.adversarial_print_loss(pred_fake_print, valid)
         self.g_adv_photo_loss_meter.update(g_adv_photo_loss.item())
         self.g_adv_print_loss_meter.update(g_adv_print_loss.item())
 
@@ -330,8 +316,8 @@ class Model(object):
         self.g_adv_loss_meter.update(g_adv_loss.item())
 
         # Pixel Loss
-        g_pixel_photo_loss = self.pixel_photo_loss(fake_photo, img_photo).to(CPU)
-        g_pixel_print_loss = self.pixel_print_loss(fake_print, img_print).to(CPU)
+        g_pixel_photo_loss = self.pixel_photo_loss(fake_photo, img_photo)
+        g_pixel_print_loss = self.pixel_print_loss(fake_print, img_print)
 
         self.g_pixel_photo_loss_meter.update(g_pixel_photo_loss.item())
         self.g_pixel_print_loss_meter.update(g_pixel_print_loss.item())
@@ -346,11 +332,11 @@ class Model(object):
         g_perceptual_photo_loss = self.perceptual_photo_loss(
             input=fake_photo_features,
             target=photo_features
-        ).to(CPU)
+        )
         g_perceptual_print_loss = self.perceptual_print_loss(
             input=fake_print_features,
             target=print_features
-        ).to(CPU)
+        )
 
         self.g_perceptual_photo_loss_meter.update(g_perceptual_photo_loss.item())
         self.g_perceptual_print_loss_meter.update(g_perceptual_print_loss.item())
@@ -364,16 +350,16 @@ class Model(object):
         # dist = None
         # Identity Loss
         if dist_measure == 'l2':
-            dist = ((y_vis.to(CPU) - y_nir.to(CPU)) ** 2).sum(1)
+            distance = ((y_vis - y_nir) ** 2).sum(1)
         elif dist_measure == 'cos':
             cos = torch.nn.CosineSimilarity(dim=1)
-            dist = cos(y_vis.to(CPU), y_nir.to(CPU))
+            distance = cos(y_vis, y_nir)
         else:
             raise ValueError('dist_measure must be either "l2" or "cos".')
 
-        margin = torch.ones_like(dist, device=CPU) * margin
+        margin = torch.ones_like(distance) * margin
 
-        g_id_loss_raw = (lbl * dist + (1 - lbl) * func.relu(margin - dist)).mean()
+        g_id_loss_raw = (lbl * distance + (1 - lbl) * func.relu(margin - distance)).mean()
         self.g_id_loss_raw_meter.update(g_id_loss_raw.item())
         g_id_loss = g_id_loss_raw * identity_coeff
         self.g_id_loss_meter.update(g_id_loss.item())
@@ -386,9 +372,8 @@ class Model(object):
         g_loss.backward()
         self.optimizer_g.step()
 
-        acc = (dist < margin).type(torch.float)
-        acc = (acc == lbl).type(torch.float)
-        acc = acc.mean()
+        acc = torch.less(distance, margin).float()
+        acc = torch.equal(acc, lbl).float().mean()
         self.accuracy_meter.update(acc)
 
         # """"""""""""""""""
@@ -400,10 +385,10 @@ class Model(object):
         pred_real_print = self.disc_print(img_print)
         pred_fake_print = self.disc_print(fake_print.detach())
 
-        d_real_photo_loss = self.adversarial_photo_loss(pred_real_photo, valid.to(GPU0)).to(CPU)
-        d_real_print_loss = self.adversarial_print_loss(pred_real_print, valid.to(GPU1)).to(CPU)
-        d_fake_photo_loss = self.adversarial_photo_loss(pred_fake_photo, fake.to(GPU0)).to(CPU)
-        d_fake_print_loss = self.adversarial_print_loss(pred_fake_print, fake.to(GPU1)).to(CPU)
+        d_real_photo_loss = self.adversarial_photo_loss(pred_real_photo, valid)
+        d_real_print_loss = self.adversarial_print_loss(pred_real_print, valid)
+        d_fake_photo_loss = self.adversarial_photo_loss(pred_fake_photo, fake)
+        d_fake_print_loss = self.adversarial_print_loss(pred_fake_print, fake)
 
         self.d_real_photo_loss_meter.update(d_real_photo_loss.item())
         self.d_real_print_loss_meter.update(d_real_print_loss.item())
@@ -437,21 +422,15 @@ class Model(object):
 
             for images, labels in vis_loader:
                 labels = labels.type(torch.float)
-                labels = labels.to(CPU)
-                images = images.to(GPU0)
 
                 _, features = self.net_vis(images)
-                features = features.to(CPU)
                 vis_features.append(features)
                 vis_labels.append(labels)
 
             for images, labels in nir_loader:
                 labels = labels.type(torch.float)
-                labels = labels.to(CPU)
-                images = images.to(GPU1)
 
                 _, features = self.net_nir(images)
-                features = features.to(CPU)
                 nir_features.append(features)
                 nir_labels.append(labels)
 
@@ -523,7 +502,9 @@ class Model(object):
             self._reset_meters()
 
 
-def run(args):
+def main(gpu, args):
+    set_seeds(args.fixed_seed)
+    device = torch.device('cuda:{}'.format(gpu) if torch.cuda.is_available() else 'cpu')
     model_name = '{}_m{}_id{}_ad{}_pi{}_pe{}_f{}'.format(
         args.backbone,
         args.margin,
@@ -601,8 +582,12 @@ def run(args):
     model.eval_writer.close()
 
 
+def distributed_run():
+    parser = create_argparser()
+    parser = add_ddp_args(parser)
+    args = parser.parse_args()
+    ddp_setup(main, args)
+
+
 if __name__ == '__main__':
-    python_random.seed(62484)
-    np.random.seed(62484)
-    torch.manual_seed(62484)
-    run(parse_args())
+    distributed_run()

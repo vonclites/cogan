@@ -52,4 +52,4 @@ if __name__ == '__main__':
     for train, test in zip(args.valid_train_classes_fps, args.valid_test_classes_fps):
         args.valid_train_classes_fp = train
         args.valid_test_classes_fp = test
-        train_cogan.run(args)
+        train_cogan.main(args)
