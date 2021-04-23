@@ -1,0 +1,67 @@
+#!/bin/bash 
+#BSUB -J cogan
+#BSUB -n 2
+#BSUB -m training 
+#BSUB -P  OARMY42460100
+#BSUB -q debug
+#BSUB -gpu "num=2:mode=shared:j_exclusive=yes"
+#BSUB -o ./%J_hw.out 
+#BSUB -e ./%J_hw.err 
+#LSF -W 01:00:00
+
+export RUNDIR=$WORKDIR/cogan/$LSB_JOBID
+export DATADIR=$WORKDIR/cogan/data
+export CODEDIR=$WORKDIR/cogan/code
+
+# ARGS
+batch_size=128
+num_epochs=2
+margin=100
+backbone="resnet18"
+identity_coeff=10
+adversarial_coeff=1
+pixel_coeff=1
+perceptual_coeff=1
+feat_dim=64
+dist_measure="l2"
+positive_prob=0.5
+
+dataset="hk"
+
+nir_dir=$DATADIR/$dataset/images/dev/NIR
+vis_dir=$DATADIR/$dataset/images/dev/VIS
+valid_train_classes_fp=$DATADIR/$dataset/protocols/open_world/dev.txt
+valid_test_classes_fp=$DATADIR/$dataset/protocols/open_world/test.txt
+nir_mean_fp=$DATADIR/$dataset/stats/nir_mean.txt
+nir_std_fp=$DATADIR/$dataset/stats/nir_std.txt
+vis_mean_fp=$DATADIR/$dataset/stats/vis_mean.txt
+vis_std_fp=$DATADIR/$dataset/stats/vis_std.txt
+
+# EXECUTION
+mkdir -p $RUNDIR
+cd $CODEDIR
+source /p/app/Anaconda3-2020.11/bin/activate pt_p38
+
+python $WORKDIR/cogan/code/cogan/train_cogan.py \
+  --batch_size $batch_size \
+  --num_epochs $num_epochs \
+  --margin $margin \
+  --backbone $backbone \
+  --identity_coeff $identity_coeff \
+  --adversarial_coeff $adversarial_coeff \
+  --pixel_coeff $pixel_coeff \
+  --perceptual_coeff $perceptual_coeff \
+  --feat_dim $feat_dim \
+  --dist_measure $dist_measure \
+  --positive_prob $positive_prob \
+  --model_dir $model_dir \
+  --nir_dir $nir_dir \
+  --vis_dir $vis_dir \
+  --valid_train_classes_fp $valid_train_classes_fp \
+  --valid_test_classes_fp $valid_test_classes_fp \
+  --nir_mean_fp $nir_mean_fp \
+  --nir_std_fp $nir_std_fp \
+  --vis_mean_fp $vis_mean_fp \
+  --vis_std_fp $vis_std_fp
+
+cp -R $RUNDIR $HOME/
